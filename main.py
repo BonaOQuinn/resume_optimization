@@ -1,12 +1,12 @@
 import os 
 from dotenv import load_dotenv
 from langchain import OpenAI
-from langchain_openai import OpenaiEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
 
 load_dotenv()
 
-embeddings = OpenaiEmbeddings(model="text-embedding-3-large")
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
 
 vector_store = Chroma(
