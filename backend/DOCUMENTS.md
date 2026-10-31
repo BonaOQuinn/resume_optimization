@@ -51,3 +51,42 @@ Run the document preparation checks:
 ```bash
 python -m unittest discover -s tests -p test_prepare_documents.py -v
 ```
+
+## Embed and store the resume documents
+
+From the repository root, with your virtual environment active:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Set `OPENAI_API_KEY` in the root `.env` file or in your environment. Then, after
+creating and populating `backend/data/resume.db`, run:
+
+```bash
+python main.py
+```
+
+The command builds LangChain `Document` objects from SQLite, embeds their full
+text with `text-embedding-3-large`, and stores text, metadata, IDs, and vectors in
+the `resume_collection` Chroma collection at `backend/data/chroma`. Chroma
+persists automatically. The default SQLite, Chroma, and `.env` paths are based
+on the repository location. Custom paths can be passed with `--database PATH`
+and `--persist-directory PATH`.
+
+Importing `main` or running `python main.py --help` does not create an embedding
+client or index data. Missing databases fail with a helpful message; empty
+databases do not create a vector store.
+
+Running the command again re-embeds every document, so it makes additional API
+calls. Matching IDs are updated instead of duplicated. Deleted SQLite records
+are not automatically removed from Chroma. Keep the same embedding model when
+querying this collection. API credentials and the default generated data paths
+are ignored by Git.
+
+Run all checks, including indexing with temporary data and local test embeddings
+(no OpenAI API calls):
+
+```bash
+python -m unittest discover -s tests -v
+```

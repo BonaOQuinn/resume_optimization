@@ -1,5 +1,5 @@
 .env
-backend/__pycache__/
+__pycache__/
 backend/data/*.json
 backend/data/*.db*
 backend/data/chroma/

@@ -4,20 +4,17 @@ import argparse
 from pathlib import Path
 
 from dotenv import load_dotenv
-from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
 
-load_dotenv()
+from backend.document_object import create_resume_documents
+from backend.prepare_documents import DEFAULT_DATABASE
+
+
 PROJECT_ROOT = Path(__file__).resolve().parent
-
-DEFAULT_PERSIST_DIRECTORY = (
-    PROJECT_ROOT / "backend" / "data" / "chroma"
-)
-
+DEFAULT_PERSIST_DIRECTORY = PROJECT_ROOT / "backend" / "data" / "chroma"
 COLLECTION_NAME = "resume_collection"
-EMBEDDING_MODEL = "text-embedding-3-large" 
-
-embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+EMBEDDING_MODEL = "text-embedding-3-large"
 
 
 def create_vector_store(persist_directory: Path = DEFAULT_PERSIST_DIRECTORY) -> Chroma:
@@ -27,21 +24,26 @@ def create_vector_store(persist_directory: Path = DEFAULT_PERSIST_DIRECTORY) -> 
     return Chroma(
         collection_name=COLLECTION_NAME,
         embedding_function=embeddings,
-        persist_directory=str(persist_directory),
+        persist_directory=str(Path(persist_directory).resolve()),
     )
 
 
 def index_resume_documents(
-    database_path: Path = PROJECT_ROOT / "backend" / "data" / "resume.db",
+    database_path: Path = DEFAULT_DATABASE,
     persist_directory: Path = DEFAULT_PERSIST_DIRECTORY,
 ) -> int:
-    DEFAULT_DATABASE = PROJECT_ROOT / "backend" / "data" / "resume.db"
-) -> int:
-    """Embed prepared resume documents and add them to the persistent collection.
+    """Embed all resume documents and upsert them using their source IDs.
 
-    The prepared document IDs are passed to Chroma so records keep their stable
-    source IDs when the indexing command is run again.
+    Running again re-embeds the documents and updates matching IDs. This does
+    not remove vectors for records that have been deleted from SQLite.
     """
+    database_path = Path(database_path).resolve()
+    if not database_path.is_file():
+        raise FileNotFoundError(
+            f"Resume database not found: {database_path}. "
+            "Create and populate the SQLite database before indexing."
+        )
+
     documents = create_resume_documents(database_path)
     if not documents:
         return 0
@@ -69,7 +71,7 @@ def main() -> None:
         print("No resume documents found; nothing was added to Chroma.")
     else:
         print(
-            f"Embedded and added {count} resume documents to the "
+            f"Embedded and stored {count} resume documents in the "
             f"'{COLLECTION_NAME}' collection at {args.persist_directory.resolve()}."
         )
 
