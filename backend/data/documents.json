@@ -1,0 +1,645 @@
+[
+  {
+    "id": "career_item:1",
+    "text": "Type: experience\nTitle: Forward Deployed Engineer\nOrganization: Brainstorm.uno\n\nAccomplishments:\n- Develop and maintain full-stack features for an AI-powered startup ideation and collaboration platform, spanning user interfaces, APIs, databases, and application security.\n- Orchestrate parallel AI coding agents using Claude and ChatGPT to implement features, troubleshoot issues, and coordinate development across frontend and backend components.\n- Integrate AI capabilities into application workflows, connecting model outputs with backend services and user-facing features.",
+    "metadata": {
+      "record_id": 1,
+      "source_table": "career_items",
+      "source_file": "experience.md",
+      "item_type": "experience",
+      "title": "Forward Deployed Engineer",
+      "organization": "Brainstorm.uno",
+      "status": null
+    }
+  },
+  {
+    "id": "career_item:2",
+    "text": "Type: experience\nTitle: Web Developer\nOrganization: StaySharpSD.com\n\nAccomplishments:\n- Developed full stack web application for Barbershop management / appointments\n- Created / maintain PostgreSQL table for Barbers, schedule, availability, skills which is connected to the User Interface via express framework to connect a REST API for user to book appointment\n- automation of haircut appointments increased number of bookings by 18%",
+    "metadata": {
+      "record_id": 2,
+      "source_table": "career_items",
+      "source_file": "experience.md",
+      "item_type": "experience",
+      "title": "Web Developer",
+      "organization": "StaySharpSD.com",
+      "status": null
+    }
+  },
+  {
+    "id": "career_item:3",
+    "text": "Type: experience\nTitle: Chief Technical Officer\nOrganization: World Computing Organization(SDSU chapter)\n\nAccomplishments:\n- Collaboration with exec board / industry professionals to design and host weekly meetings for all SDSU students to leverage AI to become more competitive in their career paths\n- Designed and lead projects, workshops, and guest speaker lectures (Agentic AI workshops, computer vision demos, business strategy)\n- Defined and delegated specific responsibilities for each executive based on identification of their strength and weaknesses",
+    "metadata": {
+      "record_id": 3,
+      "source_table": "career_items",
+      "source_file": "experience.md",
+      "item_type": "experience",
+      "title": "Chief Technical Officer",
+      "organization": "World Computing Organization(SDSU chapter)",
+      "status": null
+    }
+  },
+  {
+    "id": "career_item:4",
+    "text": "Type: project\nTitle: EasyChefAI\n\nAccomplishments:\n- Full stack android app that allows users to interact with a chatbot to create a personalized fitness plan based on their fitness goals, weight, height, BMI, age, and dietary preferences\n- Leveraged Google’s Gemini’s API to create an AI “fitness coach” which strictly gives advice for fitness and health\n- Utilized prompt engineering, chat summarization, and API key rotation to reduce token usage by 35maintain consistent efficiency for chats\n- Implemented unit testing to optimize performance before deployment",
+    "metadata": {
+      "record_id": 4,
+      "source_table": "career_items",
+      "source_file": "projects.md",
+      "item_type": "project",
+      "title": "EasyChefAI",
+      "organization": null,
+      "status": null
+    }
+  },
+  {
+    "id": "career_item:5",
+    "text": "Type: project\nTitle: Linux / Unix Server development\n\nAccomplishments:\n- Built and administered a multi-VM infrastructure environment across OpenBSD, FreeBSD, AlmaLinux, Ubuntu, Solaris, and IBM AIX. With the goal of integrating networking, storage, authentication, security, and application services across heterogeneous operating systems\n- Engineered core network and identity infrastructure using BIND9 forward/reverse DNS, LDAP centralized authentication, OpenSSL PKI/TLS certificates, SSH key authentication, VPN connectivity, port forwarding, and ProxyJump routing between systems\n- Deployed and managed containerized NGINX services using Docker and Docker Compose, integrating systemd service management, NFS shared storage, automounting, firewall configuration, and centralized system resources",
+    "metadata": {
+      "record_id": 5,
+      "source_table": "career_items",
+      "source_file": "projects.md",
+      "item_type": "project",
+      "title": "Linux / Unix Server development",
+      "organization": null,
+      "status": null
+    }
+  },
+  {
+    "id": "career_item:6",
+    "text": "Type: project\nTitle: Handles\nOrganization: personal\nStatus: in progress\n\nAccomplishments:\n- Used data processing to create a dataset of 10k+ images consisting of frames from short videos of variety of players, environments, basketballs to result in consistent tracking of the basketball across each frame via YOLO and Bytetrack combination framework.\n- Implementation of mediapipe pose estimation techniques to track 33 keypoints across the players body to improve accuracy of basketball skill assessment for feedback from AI model.\n- After initial training of the YOLOv26s.pt, I refined the model with optimized parameters to increase accuracy of tracking the basketball to account for frequent occlution throughout the video",
+    "metadata": {
+      "record_id": 6,
+      "source_table": "career_items",
+      "source_file": "projects.md",
+      "item_type": "project",
+      "title": "Handles",
+      "organization": "personal",
+      "status": "in progress"
+    }
+  },
+  {
+    "id": "career_item:7",
+    "text": "Type: project\nTitle: Change Order Automation\nOrganization: AI CLUB\nStatus: in progress\n\nAccomplishments:\n- Developing a React Native and FastAPI app for contractors to document work changes with photos, route them to the office, and request client approval.\n- Built backend endpoints for photo submission, office review, and approval decisions.\n- Designing a retrieval-augmented generation (RAG) pipeline that uses an AI model and AWS-hosted knowledge bases to compare proposed changes with project scope and provide context for office review.",
+    "metadata": {
+      "record_id": 7,
+      "source_table": "career_items",
+      "source_file": "projects.md",
+      "item_type": "project",
+      "title": "Change Order Automation",
+      "organization": "AI CLUB",
+      "status": "in progress"
+    }
+  },
+  {
+    "id": "course:1",
+    "text": "Type: course\nCourse code: CS577\nCourse: intro to Data Science and Principles\nCategory: AI",
+    "metadata": {
+      "record_id": 1,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS577",
+      "name": "intro to Data Science and Principles",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "course:2",
+    "text": "Type: course\nCourse code: CS549\nCourse: Machine Learning\nCategory: AI",
+    "metadata": {
+      "record_id": 2,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS549",
+      "name": "Machine Learning",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "course:3",
+    "text": "Type: course\nCourse code: CS553\nCourse: Neural Networks\nCategory: AI",
+    "metadata": {
+      "record_id": 3,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS553",
+      "name": "Neural Networks",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "course:4",
+    "text": "Type: course\nCourse code: CS559\nCourse: Computer Vision\nCategory: AI",
+    "metadata": {
+      "record_id": 4,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS559",
+      "name": "Computer Vision",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "course:5",
+    "text": "Type: course\nCourse code: CS450\nCourse: Intro to AI\nCategory: AI",
+    "metadata": {
+      "record_id": 5,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS450",
+      "name": "Intro to AI",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "course:6",
+    "text": "Type: course\nCourse code: CS210\nCourse: Data Structures\nCategory: Computer Science",
+    "metadata": {
+      "record_id": 6,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS210",
+      "name": "Data Structures",
+      "category": "Computer Science"
+    }
+  },
+  {
+    "id": "course:7",
+    "text": "Type: course\nCourse code: CS449\nCourse: Algorithms\nCategory: Computer Science",
+    "metadata": {
+      "record_id": 7,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS449",
+      "name": "Algorithms",
+      "category": "Computer Science"
+    }
+  },
+  {
+    "id": "course:8",
+    "text": "Type: course\nCourse code: CS349\nCourse: Computer Architecture\nCategory: Computer Science",
+    "metadata": {
+      "record_id": 8,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS349",
+      "name": "Computer Architecture",
+      "category": "Computer Science"
+    }
+  },
+  {
+    "id": "course:9",
+    "text": "Type: course\nCourse code: CS250\nCourse: Software Principles\nCategory: Computer Science",
+    "metadata": {
+      "record_id": 9,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS250",
+      "name": "Software Principles",
+      "category": "Computer Science"
+    }
+  },
+  {
+    "id": "course:10",
+    "text": "Type: course\nCourse code: CS420\nCourse: Advanced Programming Languages\nCategory: Computer Science",
+    "metadata": {
+      "record_id": 10,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS420",
+      "name": "Advanced Programming Languages",
+      "category": "Computer Science"
+    }
+  },
+  {
+    "id": "course:11",
+    "text": "Type: course\nCourse code: CS470\nCourse: Unix Administration\nCategory: IT",
+    "metadata": {
+      "record_id": 11,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS470",
+      "name": "Unix Administration",
+      "category": "IT"
+    }
+  },
+  {
+    "id": "course:12",
+    "text": "Type: course\nCourse code: CS320\nCourse: intro to cybersecurity\nCategory: IT",
+    "metadata": {
+      "record_id": 12,
+      "source_table": "courses",
+      "source_file": "relevant_courses.md",
+      "item_type": "course",
+      "code": "CS320",
+      "name": "intro to cybersecurity",
+      "category": "IT"
+    }
+  },
+  {
+    "id": "skill:1",
+    "text": "Type: skill\nSkill: RAG pipline development\nCategory: AI",
+    "metadata": {
+      "record_id": 1,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "RAG pipline development",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "skill:2",
+    "text": "Type: skill\nSkill: Computer Vision\nCategory: AI",
+    "metadata": {
+      "record_id": 2,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "Computer Vision",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "skill:3",
+    "text": "Type: skill\nSkill: prompt engineering\nCategory: AI",
+    "metadata": {
+      "record_id": 3,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "prompt engineering",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "skill:4",
+    "text": "Type: skill\nSkill: Neural Networks\nCategory: AI",
+    "metadata": {
+      "record_id": 4,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "Neural Networks",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "skill:5",
+    "text": "Type: skill\nSkill: multi-agent orchestration\nCategory: AI",
+    "metadata": {
+      "record_id": 5,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "multi-agent orchestration",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "skill:6",
+    "text": "Type: skill\nSkill: AWS bedrock + knowledge bases\nCategory: AI",
+    "metadata": {
+      "record_id": 6,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "AWS bedrock + knowledge bases",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "skill:7",
+    "text": "Type: skill\nSkill: MCP server creation\nCategory: AI",
+    "metadata": {
+      "record_id": 7,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "MCP server creation",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "skill:8",
+    "text": "Type: skill\nSkill: Exploratory Data Analysis\nCategory: AI",
+    "metadata": {
+      "record_id": 8,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "Exploratory Data Analysis",
+      "category": "AI"
+    }
+  },
+  {
+    "id": "skill:30",
+    "text": "Type: skill\nSkill: React\nCategory: Frameworks",
+    "metadata": {
+      "record_id": 30,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "React",
+      "category": "Frameworks"
+    }
+  },
+  {
+    "id": "skill:31",
+    "text": "Type: skill\nSkill: Node.js\nCategory: Frameworks",
+    "metadata": {
+      "record_id": 31,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "Node.js",
+      "category": "Frameworks"
+    }
+  },
+  {
+    "id": "skill:32",
+    "text": "Type: skill\nSkill: FastAPI\nCategory: Frameworks",
+    "metadata": {
+      "record_id": 32,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "FastAPI",
+      "category": "Frameworks"
+    }
+  },
+  {
+    "id": "skill:33",
+    "text": "Type: skill\nSkill: express\nCategory: Frameworks",
+    "metadata": {
+      "record_id": 33,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "express",
+      "category": "Frameworks"
+    }
+  },
+  {
+    "id": "skill:9",
+    "text": "Type: skill\nSkill: Python\nCategory: Languages",
+    "metadata": {
+      "record_id": 9,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "Python",
+      "category": "Languages"
+    }
+  },
+  {
+    "id": "skill:10",
+    "text": "Type: skill\nSkill: JavaScript\nCategory: Languages",
+    "metadata": {
+      "record_id": 10,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "JavaScript",
+      "category": "Languages"
+    }
+  },
+  {
+    "id": "skill:11",
+    "text": "Type: skill\nSkill: HTML\nCategory: Languages",
+    "metadata": {
+      "record_id": 11,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "HTML",
+      "category": "Languages"
+    }
+  },
+  {
+    "id": "skill:12",
+    "text": "Type: skill\nSkill: CSS\nCategory: Languages",
+    "metadata": {
+      "record_id": 12,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "CSS",
+      "category": "Languages"
+    }
+  },
+  {
+    "id": "skill:13",
+    "text": "Type: skill\nSkill: PostGreSQL\nCategory: Languages",
+    "metadata": {
+      "record_id": 13,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "PostGreSQL",
+      "category": "Languages"
+    }
+  },
+  {
+    "id": "skill:14",
+    "text": "Type: skill\nSkill: C++\nCategory: Languages",
+    "metadata": {
+      "record_id": 14,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "C++",
+      "category": "Languages"
+    }
+  },
+  {
+    "id": "skill:15",
+    "text": "Type: skill\nSkill: C\nCategory: Languages",
+    "metadata": {
+      "record_id": 15,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "C",
+      "category": "Languages"
+    }
+  },
+  {
+    "id": "skill:16",
+    "text": "Type: skill\nSkill: Java\nCategory: Languages",
+    "metadata": {
+      "record_id": 16,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "Java",
+      "category": "Languages"
+    }
+  },
+  {
+    "id": "skill:17",
+    "text": "Type: skill\nSkill: pandas\nCategory: Libraries",
+    "metadata": {
+      "record_id": 17,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "pandas",
+      "category": "Libraries"
+    }
+  },
+  {
+    "id": "skill:18",
+    "text": "Type: skill\nSkill: sklearn\nCategory: Libraries",
+    "metadata": {
+      "record_id": 18,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "sklearn",
+      "category": "Libraries"
+    }
+  },
+  {
+    "id": "skill:19",
+    "text": "Type: skill\nSkill: numpy\nCategory: Libraries",
+    "metadata": {
+      "record_id": 19,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "numpy",
+      "category": "Libraries"
+    }
+  },
+  {
+    "id": "skill:20",
+    "text": "Type: skill\nSkill: matplotlib\nCategory: Libraries",
+    "metadata": {
+      "record_id": 20,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "matplotlib",
+      "category": "Libraries"
+    }
+  },
+  {
+    "id": "skill:21",
+    "text": "Type: skill\nSkill: SQLAlchemy\nCategory: Libraries",
+    "metadata": {
+      "record_id": 21,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "SQLAlchemy",
+      "category": "Libraries"
+    }
+  },
+  {
+    "id": "skill:22",
+    "text": "Type: skill\nSkill: OpenCV\nCategory: Libraries",
+    "metadata": {
+      "record_id": 22,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "OpenCV",
+      "category": "Libraries"
+    }
+  },
+  {
+    "id": "skill:23",
+    "text": "Type: skill\nSkill: Ultralytics\nCategory: Libraries",
+    "metadata": {
+      "record_id": 23,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "Ultralytics",
+      "category": "Libraries"
+    }
+  },
+  {
+    "id": "skill:24",
+    "text": "Type: skill\nSkill: MediaPipe\nCategory: Libraries",
+    "metadata": {
+      "record_id": 24,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "MediaPipe",
+      "category": "Libraries"
+    }
+  },
+  {
+    "id": "skill:25",
+    "text": "Type: skill\nSkill: git\nCategory: Tools",
+    "metadata": {
+      "record_id": 25,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "git",
+      "category": "Tools"
+    }
+  },
+  {
+    "id": "skill:26",
+    "text": "Type: skill\nSkill: linux / openbsd / azure /\nCategory: Tools",
+    "metadata": {
+      "record_id": 26,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "linux / openbsd / azure /",
+      "category": "Tools"
+    }
+  },
+  {
+    "id": "skill:27",
+    "text": "Type: skill\nSkill: google colab\nCategory: Tools",
+    "metadata": {
+      "record_id": 27,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "google colab",
+      "category": "Tools"
+    }
+  },
+  {
+    "id": "skill:28",
+    "text": "Type: skill\nSkill: PyTorch\nCategory: Tools",
+    "metadata": {
+      "record_id": 28,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "PyTorch",
+      "category": "Tools"
+    }
+  },
+  {
+    "id": "skill:29",
+    "text": "Type: skill\nSkill: Jupyter Notebook\nCategory: Tools",
+    "metadata": {
+      "record_id": 29,
+      "source_table": "skills",
+      "source_file": "tech_skills.md",
+      "item_type": "skill",
+      "name": "Jupyter Notebook",
+      "category": "Tools"
+    }
+  }
+]
