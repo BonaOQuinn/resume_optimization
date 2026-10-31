@@ -2,3 +2,4 @@
 backend/__pycache__/
 backend/data/*.json
 backend/data/*.db*
+backend/data/chroma/

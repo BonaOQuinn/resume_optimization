@@ -12,4 +12,3 @@ resume_documents = [
     for record in prepared
 ]
 
-matches = vector_store.similarity_search(job_document["text"], k=5)
