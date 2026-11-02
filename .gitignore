@@ -4,3 +4,5 @@ backend/data/*.json
 backend/data/*.db*
 backend/data/chroma/
 backend/data/huggingface/
+inputs/private/
+outputs/
