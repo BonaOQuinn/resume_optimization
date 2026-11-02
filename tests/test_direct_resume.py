@@ -12,27 +12,28 @@ from direct_resume import extract_complete_latex, run_direct_resume_optimization
 from tests.test_resume_workflow import RecordingChatModel
 
 
-LATEX = "\\documentclass{article}\n\\begin{document}\nSource-supported draft\n\\end{document}"
+from tests.resume_fixture import LATEX, SOURCE, PASS
 
 
 class DirectResumeTests(unittest.TestCase):
     def test_one_call_gets_all_inputs_and_saves_complete_latex(self):
-        model = RecordingChatModel(responses=[AIMessage(content=LATEX)])
+        model = RecordingChatModel(responses=[AIMessage(content=LATEX), AIMessage(content=PASS)])
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "run"
-            saved = run_direct_resume_optimization("Required: Python.", "Original source facts.", output, model=model)
+            saved = run_direct_resume_optimization("Required: Python.", SOURCE, output, model=model)
             self.assertEqual(saved["latex"].read_text(encoding="utf-8"), LATEX + "\n")
             self.assertEqual(saved["response"].read_text(encoding="utf-8"), LATEX)
-            self.assertEqual({p.name for p in output.iterdir()}, {"response.md", "optimized_resume.tex"})
+            self.assertTrue({"response.md", "optimized_resume.tex", "validation.json"}.issubset({p.name for p in output.iterdir()}))
             with self.assertRaises(FileExistsError):
                 run_direct_resume_optimization("Job", "Resume", output, model=model)
-        self.assertEqual(len(model.seen), 1)
+        self.assertEqual(len(model.seen), 2)  # Writer plus independent grounding review.
         system, user = model.seen[0]
         self.assertIn("You have no tools or subagents", system.content)
         self.assertIn("Education is always the first", system.content)
         self.assertIn("Never invent", system.content)
         inputs = json.loads(user.content.split("\n", 1)[1])
-        self.assertEqual(inputs, {"job_posting": "Required: Python.", "source_resume": "Original source facts."})
+        self.assertEqual(inputs["source_resume"], SOURCE)
+        self.assertEqual(inputs["job_posting"], "Required: Python.")
 
     def test_fenced_latex_and_separate_thinking_are_accepted(self):
         self.assertEqual(extract_complete_latex("```latex\n" + LATEX + "\n```"), LATEX + "\n")
@@ -51,7 +52,7 @@ class DirectResumeTests(unittest.TestCase):
             with self.subTest(response=response), tempfile.TemporaryDirectory() as directory:
                 model = RecordingChatModel(responses=[AIMessage(content=response)])
                 saved = run_direct_resume_optimization("Job", "Source facts", Path(directory) / "run", model=model)
-                self.assertEqual(set(saved), {"response"})
+                self.assertEqual(set(saved), {"response", "validation"})
                 self.assertEqual(saved["response"].read_text(encoding="utf-8"), response)
                 self.assertFalse((saved["response"].parent / "optimized_resume.tex").exists())
 
@@ -78,12 +79,12 @@ class DirectResumeTests(unittest.TestCase):
             requested = root / "new-run"
             with patch("sys.argv", ["run_resume_agent.py", "--direct", "--job-file", str(job),
                                     "--resume-file", str(resume), "--output-dir", str(requested)]), \
-                 patch.object(runner, "run_direct_resume_optimization", return_value={"response": response, "latex": latex}) as direct, \
+                 patch.object(runner, "run_direct_resume_optimization", return_value={"response": response, "latex": latex, "validation": output / "validation.json"}) as direct, \
                  patch.object(runner, "get_resume_vector_store") as store, \
                  patch.object(runner, "run_resume_optimization") as workflow, \
                  contextlib.redirect_stdout(io.StringIO()):
                 runner.main()
-            direct.assert_called_once_with("Job", "Resume", requested, model=None)
+            direct.assert_called_once_with("Job", "Resume", requested, model=None, require_pdf=False)
             store.assert_not_called()
             workflow.assert_not_called()
 

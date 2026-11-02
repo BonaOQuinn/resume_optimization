@@ -1,80 +1,63 @@
-"""Generate a LaTeX draft in one chat call to isolate generation from agent tools."""
+"""Single-writer generation with shared validation and bounded correction."""
 
 import json
-import re
 from pathlib import Path
 
 from prompts import DEFAULT_GUIDELINES_PATH, DEFAULT_TEMPLATE_PATH, FACTUALITY_RULES
-
-
-def extract_complete_latex(response: str) -> str | None:
-    """Accept a whole LaTeX response, optionally wrapped in a single code fence.
-
-    This checks document boundaries only; it does not prove compilation or facts.
-    Ignore completed thinking blocks so reasoning cannot become the saved draft.
-    """
-    candidate = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL).strip()
-    fenced = re.fullmatch(r"```(?:latex|tex)?\s*\n(.*?)\n```", candidate, re.DOTALL)
-    if fenced:
-        candidate = fenced.group(1).strip()
-    if not re.fullmatch(
-        r"(?:%[^\n]*\n\s*)*\\documentclass(?:\[[^\]]*\])?\{[^}]+\}"
-        r"[\s\S]*\\begin\{document\}[\s\S]*\\end\{document\}", candidate
-    ):
-        return None
-    if candidate.count(r"\begin{document}") != 1 or candidate.count(r"\end{document}") != 1:
-        return None
-    return candidate + "\n"
+from resume_validation import extract_complete_latex, validate_and_export
 
 
 def run_direct_resume_optimization(
-    job_document: str, base_resume: str, output_directory: Path, *, model=None
-) -> dict[str, Path]:
-    """Save the response and, only when structurally complete, the LaTeX draft.
-
-    This generation smoke test uses the full source resume rather than vector
-    retrieval or subagents. A real missing fact may still require clarification.
-    """
+    job_document, base_resume, output_directory, *, model=None,
+    require_pdf=False, evidence_documents=None,
+):
     for name, value in (("job_document", job_document), ("base_resume", base_resume)):
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{name} must contain source text.")
-    output_directory = Path(output_directory).resolve()
-    if output_directory.exists():
+    if Path(output_directory).exists():
         raise FileExistsError(f"Use a new output directory: {output_directory}")
-
+    evidence_documents = evidence_documents or []
     instructions = (
-        "Create a complete, job-specific LaTeX resume NOW from the supplied source "
-        "resume. All source text is included in the next message. "
-        "Use the job posting to select relevant supported facts. "
-        "Return only the complete LaTeX source, beginning with \\documentclass "
-        "and ending with \\end{document}. You have no tools or subagents. "
-        "Do not ask for code to review or describe how you would help. "
-        "If a specific required source fact is missing or contradictory, return "
-        "a focused clarification instead of inventing a value. "
-        "Template names and accomplishments are examples, not candidate facts.\n\n"
-        + FACTUALITY_RULES
-        + "\n\nREQUIRED FORMATTING RULES:\n"
-        + DEFAULT_GUIDELINES_PATH.read_text(encoding="utf-8")
-        + "\n\nLATEX FORMATTING TEMPLATE (reference only):\n"
+        "Write the requested complete LaTeX resume from the candidate source facts. "
+        "You have no tools or subagents. All inputs are supplied below. "
+        "Preserve the approved template\'s entire preamble exactly. Use its article "
+        "class, centered header, resumeSubheading and resumeProjectHeading macros. "
+        "Do not switch to moderncv. Do not add a logo. Use real LaTeX links and bold, "
+        "never Markdown. Preserve dates, including future graduation dates; do not "
+        "change them to Present without source support. Never invent metrics or "
+        "interpret a malformed number as a percentage. Omit an ambiguous optional "
+        "claim. The base resume controls identity, dates, and completion status; flag "
+        "conflicts with retrieved evidence instead of silently choosing a version. "
+        "Ask a specific question if a required fact is missing. "
+        "Return complete LaTeX, not a review offer.\n\n" + FACTUALITY_RULES
+        + "\n\nREQUIRED FORMATTING:\n" + DEFAULT_GUIDELINES_PATH.read_text(encoding="utf-8")
+        + "\n\nAPPROVED TEMPLATE (layout only, not candidate facts):\n"
         + DEFAULT_TEMPLATE_PATH.read_text(encoding="utf-8")
     )
-    inputs = json.dumps(
-        {"job_posting": job_document, "source_resume": base_resume}, ensure_ascii=False
-    )
+    inputs = {"job_posting": job_document, "source_resume": base_resume,
+              "retrieved_candidate_evidence": evidence_documents}
+    messages = [
+        {"role": "system", "content": instructions},
+        {"role": "user", "content": "Create the resume from this reference data:\n" + json.dumps(inputs, ensure_ascii=False)},
+    ]
     if model is None or isinstance(model, str):
         from agent import initialize_chat_model
         model = initialize_chat_model(model)
-    output_directory.mkdir(parents=True, exist_ok=False)
-    response_text = model.invoke([
-        {"role": "system", "content": instructions},
-        {"role": "user", "content": "Create the resume using this reference data:\n" + inputs},
-    ]).text
-    response = output_directory / "response.md"
-    response.write_text(response_text, encoding="utf-8")
-    saved = {"response": response}
-    latex = extract_complete_latex(response_text)
-    if latex is not None:
-        destination = output_directory / "optimized_resume.tex"
-        destination.write_text(latex, encoding="utf-8")
-        saved["latex"] = destination
-    return saved
+
+    last_response = None
+
+    def generate(issues):
+        nonlocal last_response
+        attempt_messages = list(messages)
+        if issues:
+            attempt_messages.extend([
+                {"role": "assistant", "content": last_response},
+                {"role": "user", "content": "Correct these validation failures using the original source facts and approved template. Return the complete corrected LaTeX.\n" + "\n".join(issues)},
+            ])
+        response = model.invoke(attempt_messages).text
+        last_response = response
+        return {"response": response, "sources": evidence_documents,
+                "evidence": "\n\n".join(evidence_documents),
+                "trace": attempt_messages[1:] + [{"role": "assistant", "content": response}]}
+
+    return validate_and_export(output_directory, generate, model, base_resume, require_pdf=require_pdf)

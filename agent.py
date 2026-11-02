@@ -133,6 +133,11 @@ def initialize_chat_model(model_name: str | None = None) -> BaseChatModel:
         )
     # init_chat_model selects the provider integration. It creates the client;
     # inference happens later when the compiled agent is invoked.
+    if provider == "ollama":
+        context_size = int(os.getenv("RESUME_OLLAMA_NUM_CTX", "16384"))
+        if context_size <= 0:
+            raise ValueError("RESUME_OLLAMA_NUM_CTX must be a positive integer.")
+        return init_chat_model(selected, num_ctx=context_size, temperature=0)
     return init_chat_model(selected)
 
 
