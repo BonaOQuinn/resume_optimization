@@ -167,8 +167,11 @@ The resume-generation helpers below connect this retrieval tool and shared
 backend to the orchestrator and its specialist prompts.
 
 MiniLM handles embedding and retrieval. The agent's chat model is a separate
-choice; this module does not select a provider or make chat model API calls.
-Running `python agent.py` only loads definitions. The retrieval tests exercise
+choice configured with `RESUME_CHAT_MODEL`; chat inference happens when the
+created agent is invoked.
+Running `python agent.py` initializes the configured chat model and creates the
+agent; it does not invoke it or generate a resume. Importing `agent.py` remains
+lazy and does not initialize a chat model. The retrieval tests exercise
 saving and reading files in a real graph without a chat model:
 
 ```bash
@@ -221,13 +224,13 @@ qualification is reported as a gap and does not automatically block generation.
 The workflow preserves ongoing/planned status and exact documented metrics.
 It does not infer qualifications from similarity alone.
 
-Once you have initialized your chosen chat model and prepared the input text:
+Once your chat model is configured and the input text is prepared:
 
 ```python
 from agent import create_resume_agent, prepare_resume_request
 
 resume_agent = create_resume_agent(
-    model=your_chat_model,
+    # model=your_chat_model,  # Optional pre-initialized model override.
     # Optional additional constraints or a compatible Jake-style template:
     # latex_guidelines=your_additional_rules,
     # latex_template=your_template_text,
@@ -265,3 +268,57 @@ formatting macros, with empty content slots for verified candidate information.
 It does not supply candidate facts. Your original uploaded LaTeX can be provided
 as `base_resume` if it is your current factual resume; the agent still flags
 ambiguous dates/metrics instead of inferring corrections.
+
+## Initialize the chat model and create the agent
+
+Install the updated dependencies, then select a tool-calling chat model in your
+existing root `.env` using the `RESUME_CHAT_MODEL` setting. `.env.example` lists
+the setting without real credentials. No chat model/provider is hardcoded.
+
+The value must use `provider:model` syntax. For a locally installed Ollama model,
+replace the placeholder with the exact tag shown by `ollama list`:
+
+```dotenv
+RESUME_CHAT_MODEL=ollama:YOUR_INSTALLED_MODEL
+```
+
+The `langchain-ollama` client integration is included in requirements. The Ollama
+application/service and a downloaded model with tool-calling support are needed
+for local inference; installing the Python package alone does not install them.
+Hosted providers need their own LangChain integration package and credentials.
+
+```bash
+python -m pip install -r requirements.txt
+python agent.py
+```
+
+An explicit model flag overrides the environment setting:
+
+```bash
+python agent.py --model ollama:YOUR_INSTALLED_MODEL --output-mode latex_only
+```
+
+The entry point explicitly runs `initialize_chat_model(...)`, then
+`create_resume_agent(model=model, ...)`, and prints when the client and graph
+are constructed. That confirms construction, not a live model response or
+server availability. It makes no inference request and does not download an
+Ollama model or re-index the resume collection.
+
+Programmatic creation can use either form:
+
+```python
+from agent import initialize_chat_model, create_resume_agent, prepare_resume_request
+
+# Select the model from RESUME_CHAT_MODEL in .env:
+resume_agent = create_resume_agent()
+
+# Or explicitly initialize a model first, as in the LangChain tutorial:
+model = initialize_chat_model("ollama:YOUR_INSTALLED_MODEL")
+resume_agent = create_resume_agent(model=model, output_mode="latex_only")
+
+# Invoke only when actual job and full resume source text are ready:
+result = resume_agent.invoke(prepare_resume_request(job_text, base_resume_text))
+```
+
+MiniLM remains the separate local embedding model. The selected chat model
+powers the orchestrator and subagents, including tool use and LaTeX generation.

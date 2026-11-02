@@ -1,10 +1,12 @@
-"""Resume evidence retrieval tools for a Deep Agent.
+"""Chat-model initialization and resume evidence retrieval for a Deep Agent.
 
 Pass both search_resume and this module's backend to create_deep_agent.
 StateBackend file operations must run inside an agent/graph execution.
 """
 
+import argparse
 import json
+import os
 from functools import lru_cache
 from typing import Literal
 
@@ -15,6 +17,7 @@ from main import create_vector_store
 from deepagents import create_deep_agent
 from deepagents.backends import StateBackend
 from deepagents.backends.utils import create_file_data
+from langchain.chat_models import init_chat_model
 from langchain.tools import tool
 from langchain_core.utils.uuid import uuid7
 from langchain_core.language_models import BaseChatModel
@@ -97,19 +100,40 @@ def search_resume(
     return message
 
 
+def initialize_chat_model(model_name: str | None = None) -> BaseChatModel:
+    """Initialize the tool-calling chat model chosen explicitly or in .env."""
+    selected = model_name if model_name is not None else os.getenv("RESUME_CHAT_MODEL")
+    if not isinstance(selected, str) or not selected.strip():
+        raise ValueError(
+            "Choose a chat model: set RESUME_CHAT_MODEL in .env or pass --model "
+            "using provider:model (for example, ollama:YOUR_INSTALLED_MODEL). "
+            "MiniLM is the embedding model, not the chat model."
+        )
+    selected = selected.strip()
+    provider, separator, name = selected.partition(":")
+    if not separator or not provider.strip() or not name.strip():
+        raise ValueError(
+            "The chat model must use provider:model syntax, such as "
+            "ollama:YOUR_INSTALLED_MODEL."
+        )
+    # init_chat_model selects the provider integration. It creates the client;
+    # inference happens later when the compiled agent is invoked.
+    return init_chat_model(selected)
+
+
 def create_resume_agent(
-    model: str | BaseChatModel,
+    model: str | BaseChatModel | None = None,
     *,
     latex_guidelines: str | None = None,
     output_mode: OutputMode = "latex_with_notes",
     latex_template: str | None = None,
 ):
-    """Assemble the resume orchestrator and reviewers using a caller-chosen model."""
-    if model is None:
-        raise ValueError("Choose a chat model for the resume agent.")
+    """Initialize the chosen model and assemble the resume workflow."""
     instructions, subagents = build_resume_prompts(
         latex_guidelines, output_mode=output_mode, latex_template=latex_template
     )
+    if model is None or isinstance(model, str):
+        model = initialize_chat_model(model)
     return create_deep_agent(
         model=model,
         tools=[search_resume],
@@ -138,3 +162,30 @@ def prepare_resume_request(job_document: str, base_resume: str) -> dict:
             BASE_RESUME_PATH: create_file_data(base_resume),
         },
     }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Initialize the chat model and create the resume agent."
+    )
+    parser.add_argument(
+        "--model", help="Tool-calling chat model as provider:model; defaults to RESUME_CHAT_MODEL."
+    )
+    parser.add_argument(
+        "--output-mode", choices=("latex_only", "latex_with_notes"),
+        default="latex_with_notes",
+    )
+    args = parser.parse_args()
+    try:
+        # Explicit model initialization followed by agent creation, as in the
+        # tutorial. The agent includes the Jake layout and specialist prompts.
+        model = initialize_chat_model(args.model)
+        resume_agent = create_resume_agent(model=model, output_mode=args.output_mode)
+    except Exception as error:
+        parser.exit(1, f"Resume agent initialization failed: {error}\n")
+    print("Resume agent created with the Jake template, retrieval tool, and three specialist subagents.")
+    print("Ready to invoke with prepare_resume_request(job_document, base_resume).")
+
+
+if __name__ == "__main__":
+    main()
