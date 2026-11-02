@@ -11,9 +11,14 @@ from functools import lru_cache
 # and project-local Hugging Face caches. Import it before other HF integrations.
 from main import create_vector_store
 
+from deepagents import create_deep_agent
 from deepagents.backends import StateBackend
+from deepagents.backends.utils import create_file_data
 from langchain.tools import tool
 from langchain_core.utils.uuid import uuid7
+from langchain_core.language_models import BaseChatModel
+
+from prompts import BASE_RESUME_PATH, JOB_PATH, OutputMode, build_resume_prompts
 
 
 backend = StateBackend()
@@ -77,3 +82,46 @@ def search_resume(query: str) -> str:
             f"{response.path}: {response.error}" for response in failed
         )
     return message
+
+
+def create_resume_agent(
+    model: str | BaseChatModel,
+    *,
+    latex_guidelines: str,
+    output_mode: OutputMode = "latex_with_notes",
+    latex_template: str | None = None,
+):
+    """Assemble the resume orchestrator and reviewers using a caller-chosen model."""
+    if model is None:
+        raise ValueError("Choose a chat model for the resume agent.")
+    instructions, subagents = build_resume_prompts(
+        latex_guidelines, output_mode=output_mode, latex_template=latex_template
+    )
+    return create_deep_agent(
+        model=model,
+        tools=[search_resume],
+        backend=backend,
+        system_prompt=instructions,
+        subagents=subagents,
+    )
+
+
+def prepare_resume_request(job_document: str, base_resume: str) -> dict:
+    """Attach source inputs to the virtual filesystem for an agent invocation."""
+    for name, value in (("job_document", job_document), ("base_resume", base_resume)):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{name} must contain source text.")
+    return {
+        "messages": [{
+            "role": "user",
+            "content": (
+                "Optimize my resume for the job in " + JOB_PATH
+                + " using the source resume in " + BASE_RESUME_PATH
+                + " and the supplied LaTeX guidelines. Read both input files first."
+            ),
+        }],
+        "files": {
+            JOB_PATH: create_file_data(job_document),
+            BASE_RESUME_PATH: create_file_data(base_resume),
+        },
+    }
