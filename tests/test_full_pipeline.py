@@ -27,6 +27,7 @@ from tests.resume_fixture import LATEX, SOURCE, PASS
 from tests.test_index_resume_documents import OfflineEmbeddings
 from tests.test_resume_workflow import RecordingChatModel
 from tests.tokenizer_fixture import make_tokenizer
+from tests.test_tailoring import plan_for
 
 
 @unittest.skipUnless(shutil.which("pdflatex"), "Integration tests require pdflatex")
@@ -61,7 +62,7 @@ class FullPipelineTests(unittest.TestCase):
                     saved = run_resume_optimization("Required: Python SQL backend engineering.", SOURCE, root / "run", model=model, require_pdf=True)
             else:
                 bad = LATEX.replace("{article}", "{moderncv}").replace(r"18\%", r"35\%")
-                model = RecordingChatModel(responses=[AIMessage(content=bad), AIMessage(content=LATEX), AIMessage(content=PASS)])
+                model = RecordingChatModel(responses=[AIMessage(content=json.dumps(plan_for())), AIMessage(content=bad), AIMessage(content=LATEX), AIMessage(content=PASS), AIMessage(content=PASS)])
                 saved = run_validated_pipeline("Required: Python SQL backend engineering.", SOURCE, root / "run", model=model, vector_store=store, require_pdf=True)
             report = json.loads(saved["validation"].read_text())
             self.assertEqual(report["status"], "PASS")
@@ -83,7 +84,9 @@ class FullPipelineTests(unittest.TestCase):
             self.assertTrue((saved["latex"].parent / "trace.json").exists())
             if not agent_mode:
                 self.assertEqual(len(report["attempts"]), 2)
-                self.assertIn("retrieved_candidate_evidence", str(model.seen[0]))
+                self.assertIn("candidate_sources", str(model.seen[0]))
+                self.assertIn("selection_plan", str(model.seen[1]))
+                self.assertEqual(report["attempts"][-1]["tailoring"], "PASS")
 
     def test_explicit_rag_pipeline_repairs_and_compiles(self):
         self.run_pipeline()

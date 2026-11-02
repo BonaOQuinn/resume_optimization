@@ -37,6 +37,13 @@ def active_tex(text):
     )
 
 
+def candidate_source_text(text):
+    """Exclude template code and commented examples from candidate evidence."""
+    if r"\begin{document}" in text:
+        return active_tex(text.partition(r"\begin{document}")[2]).replace(r"\end{document}", "").strip()
+    return text
+
+
 def validate_resume(latex, sources, template=None):
     """Check template and selected factual invariants, not semantic equivalence.
 
@@ -73,6 +80,10 @@ def validate_resume(latex, sources, template=None):
         issues.append(r"Escape percentage signs with \% so TeX does not treat the remainder as a comment.")
     if re.search(r"\\resumeItem\{\s*\}|\\resumeSubheading\{\}\{\}\{\}\{\}", body):
         issues.append("Remove empty template placeholders.")
+    if re.search(r"\\{4,}\s*$", body, re.M):
+        issues.append("Use exactly two backslashes for a row break, not four consecutive backslashes.")
+    if re.search(r"\\(?:input|include|openin|openout|read|write|special|directlua|catcode|csname)\b", body):
+        issues.append("The resume body must not load files, redefine TeX syntax, or execute external operations.")
     source = "\n".join(sources).replace(r"\%", "%")
     candidate = body.replace(r"\%", "%")
     # A malformed source such as '35maintain' must not become '35%'.
@@ -112,24 +123,45 @@ def grounding_review(model, latex, sources):
         {"role": "system", "content": system},
         {"role": "user", "content": json.dumps({"candidate_sources": sources, "candidate_latex": latex}, ensure_ascii=False)},
     ]).text
-    text = re.sub(r"<think>.*?</think>", "", raw, flags=re.S).strip()
-    if text.startswith("```json\n") and text.endswith("\n```"):
-        text = text[8:-4]
+    return parse_review(raw, "Grounding"), raw
+
+
+def parse_review(raw, label):
+    from tailoring import parse_json_response
     try:
-        result = json.loads(text)
+        result = parse_json_response(raw)
         if (not isinstance(result, dict) or result.get("verdict") not in ("PASS", "REVISE")
                 or not isinstance(result.get("issues"), list)
                 or any(not isinstance(i, str) or not i.strip() for i in result["issues"])
                 or (result["verdict"] == "PASS" and result["issues"])
                 or (result["verdict"] == "REVISE" and not result["issues"])):
             raise ValueError("Invalid reviewer verdict")
-        return result, raw
+        return result
     except (ValueError, TypeError):
-        return {"verdict": "REVISE", "issues": ["Grounding reviewer returned an invalid decision; factual review did not pass."]}, raw
+        return {"verdict": "REVISE", "issues": [f"{label} reviewer returned an invalid decision; review did not pass."]}
 
 
-def compile_latex(latex, require_pdf=False):
+def find_latex_compiler():
+    """Find pdflatex, including common per-user Windows MiKTeX installations."""
+    explicit = os.getenv("RESUME_PDFLATEX")
+    if explicit:
+        candidate = Path(explicit).expanduser()
+        return str(candidate.resolve()) if candidate.is_file() else shutil.which(explicit)
     compiler = shutil.which("pdflatex")
+    if compiler:
+        return compiler
+    if os.name == "nt":
+        roots = [Path(os.getenv("LOCALAPPDATA", "")) / "Programs", Path(os.getenv("ProgramFiles", ""))]
+        for root in roots:
+            for name in ("MiKTeX", "MiKTeX2"):
+                candidate = root / name / "miktex" / "bin" / "x64" / "pdflatex.exe"
+                if candidate.is_file():
+                    return str(candidate)
+    return None
+
+
+def compile_latex(latex, require_pdf=False, log_path=None):
+    compiler = find_latex_compiler()
     if not compiler:
         if require_pdf:
             return ["pdflatex is required but was not found on PATH."], None, "FAIL"
@@ -137,33 +169,55 @@ def compile_latex(latex, require_pdf=False):
     with tempfile.TemporaryDirectory(prefix="resume-compile-") as directory:
         path = Path(directory)
         (path / "draft.tex").write_text(latex, encoding="utf-8")
+        miktex = "miktex" in compiler.lower()
+        command = [compiler, "--disable-write18" if miktex else "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error"]
+        if miktex:
+            command.append("--disable-installer")  # Report missing packages rather than opening a hidden dialog.
+        command.append("draft.tex")
         try:
             result = subprocess.run(
-                [compiler, "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error", "draft.tex"],
+                command,
                 cwd=path, capture_output=True, text=True, errors="replace", timeout=60,
                 env={**os.environ, "openin_any": "p", "openout_any": "p"},
             )
         except subprocess.TimeoutExpired:
+            if log_path:
+                partial = (path / "draft.log").read_text(errors="replace") if (path / "draft.log").exists() else ""
+                Path(log_path).write_text(partial + "\nLaTeX compilation timed out.", encoding="utf-8")
             return ["LaTeX compilation timed out."], None, "FAIL"
+        log = (path / "draft.log").read_text(errors="replace") if (path / "draft.log").exists() else result.stdout + result.stderr
+        if log_path:
+            Path(log_path).write_text(log, encoding="utf-8")
         if result.returncode or not (path / "draft.pdf").is_file():
             return ["LaTeX compilation failed:\n" + (result.stdout + result.stderr)[-2500:]], None, "FAIL"
         return [], (path / "draft.pdf").read_bytes(), "PASS"
 
 
-def validate_and_export(output_directory, generate, model, base_resume, *, require_pdf=False, max_revisions=2):
+def validate_and_export(output_directory, generate, model, base_resume, *, require_pdf=False, max_revisions=2,
+                        job_document=None, tailoring_plan=None, progress=None, _directory_ready=False, compile_pdf=True):
     """Generate -> validate -> review -> compile, with at most two corrections.
 
     generate(issues) returns response, optional latex, sources, evidence, trace.
     Only accepted artifacts receive optimized_resume filenames. The report is
     an audit of checks performed, not a guarantee of all factual correctness.
     """
+    if require_pdf and not compile_pdf:
+        raise ValueError("Required PDF output cannot be combined with disabled compilation.")
     output_directory = Path(output_directory).resolve()
-    output_directory.mkdir(parents=True, exist_ok=False)
+    output_directory.mkdir(parents=True, exist_ok=_directory_ready)
     saved = {"response": output_directory / "response.md", "validation": output_directory / "validation.json"}
-    report = {"status": "FAIL", "model": str(getattr(model, "model", type(model).__name__)), "attempts": [], "limitations": "Grounding review uses an LLM. Numeric checks do not prove attribution or semantic correctness."}
+    report = {"status": "RUNNING", "model": str(getattr(model, "model", type(model).__name__)), "attempts": [], "limitations": "Grounding and tailoring reviews use an LLM. Numeric checks do not prove attribution or semantic correctness."}
+
+    def checkpoint(stage, message):
+        report["stage"] = stage
+        saved["validation"].write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        if progress:
+            progress(stage, message)
+
     issues = []
     for attempt in range(max_revisions + 1):
         try:
+            checkpoint("writing", f"Writing the tailored resume (attempt {attempt + 1}/{max_revisions + 1})")
             generated = generate(issues)
             response = generated["response"]
             saved["response"].write_text(response, encoding="utf-8")
@@ -175,19 +229,39 @@ def validate_and_export(output_directory, generate, model, base_resume, *, requi
                 evidence.write_text(generated["evidence"], encoding="utf-8")
                 saved["evidence"] = evidence
             latex = extract_complete_latex(generated.get("latex") or response)
-            sources = [base_resume] + generated.get("sources", [])
+            if latex:
+                (output_directory / f"attempt_{attempt + 1}.tex").write_text(latex, encoding="utf-8")
+            sources = [candidate_source_text(base_resume)] + generated.get("sources", [])
             issues = validate_resume(latex, sources) if latex else ["No complete LaTeX document was returned; generate the requested resume using the supplied inputs."]
-            record = {"attempt": attempt + 1, "issues": issues, "source_count": len(sources), "grounding": "NOT_RUN", "compilation": "NOT_RUN"}
+            if latex and tailoring_plan is not None:
+                # Ignore contact/preamble cosmetics when detecting an unchanged resume.
+                source_body = active_tex(base_resume).partition(r"\section{Experience}")[2]
+                draft_body = active_tex(latex).partition(r"\section{Experience}")[2]
+                if source_body and re.sub(r"\s+", "", source_body) == re.sub(r"\s+", "", draft_body):
+                    issues.append("The experience, projects, and skills repeat the source unchanged. Apply the job-specific selection plan.")
+            record = {"attempt": attempt + 1, "issues": issues, "source_count": len(sources), "grounding": "NOT_RUN", "tailoring": "NOT_RUN", "compilation": "NOT_RUN"}
+            report["attempts"].append(record)
             pdf = None
             if not issues:
+                checkpoint("grounding", "Checking claims, dates, and metrics against your sources")
                 review, raw = grounding_review(model, latex, sources)
                 record["grounding"] = review["verdict"]
                 record["reviewer_response"] = raw
                 issues.extend(review["issues"])
-            if not issues:
-                compile_issues, pdf, record["compilation"] = compile_latex(latex, require_pdf)
+            if not issues and tailoring_plan is not None:
+                from tailoring import review_tailoring
+                checkpoint("tailoring", "Checking job relevance and project/course selection")
+                review, raw = review_tailoring(model, latex, job_document, tailoring_plan, sources)
+                record["tailoring"] = review["verdict"]
+                record["tailoring_response"] = raw
+                issues.extend(review["issues"])
+            if not issues and compile_pdf:
+                checkpoint("compiling", "Compiling the resume with pdflatex")
+                log_path = output_directory / f"compile_attempt_{attempt + 1}.log"
+                compile_issues, pdf, record["compilation"] = compile_latex(latex, require_pdf, log_path)
+                if log_path.exists():
+                    saved["compile_log"] = log_path
                 issues.extend(compile_issues)
-            report["attempts"].append(record)
             if not issues:
                 report["status"] = "PASS"
                 destination = output_directory / "optimized_resume.tex"
@@ -197,12 +271,15 @@ def validate_and_export(output_directory, generate, model, base_resume, *, requi
                     destination = output_directory / "optimized_resume.pdf"
                     destination.write_bytes(pdf)
                     saved["pdf"] = destination
-            saved["validation"].write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+            if issues:
+                report["status"] = "FAIL" if attempt == max_revisions else "RUNNING"
+            checkpoint("complete" if report["status"] == "PASS" else "revising" if report["status"] == "RUNNING" else "failed",
+                       "Resume ready" if report["status"] == "PASS" else "Correcting review issues" if report["status"] == "RUNNING" else "Review failed; see the saved report")
             if report["status"] == "PASS":
                 break
-        except Exception as error:
-            report["status"] = "ERROR"
-            report["error"] = str(error)
+        except BaseException as error:
+            report["status"] = "INTERRUPTED" if isinstance(error, KeyboardInterrupt) else "ERROR"
+            report["error"] = str(error) or "Run interrupted"
             saved["validation"].write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
             raise
     return saved

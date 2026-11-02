@@ -1,93 +1,96 @@
 # Run and validate the resume pipeline
 
-Run from the project root with your virtual environment active. Install
-dependencies with `python -m pip install -r requirements.txt` and keep your
-local Ollama server available. Use a downloaded tool-capable chat model such as
-the configured `ollama:qwen3:8b`; MiniLM is the embedding model.
+Install dependencies in the existing virtual environment:
 
-Place your complete source resume at `inputs/private/base_resume.tex`.
-This ignored file must contain your actual identity/contact, education,
-employment dates, and source facts. The tracked Markdown sections alone do not
-contain all of them. Your original inputs are never overwritten.
+```powershell
+python -m pip install -r requirements.txt
+```
 
-## Validated RAG run
+Use `python -m streamlit run app.py` for the local UI, or run the CLI below.
+The source resume supplies identity/contact details, education and dates absent
+from the indexed Markdown. Keep it at `inputs/private/base_resume.tex`; this is
+an ignored file. The populated SQLite database and MiniLM index remain unchanged.
 
-Populate your existing resume SQLite database first, then index it:
+## Job-tailored pipeline (default)
 
 ```powershell
 python main.py
-python run_resume_agent.py --pipeline --require-pdf --model ollama:qwen3:8b --job-file jobs/playstation.md --resume-file inputs/private/base_resume.tex
+python run_resume_agent.py --require-pdf --model ollama:qwen3:8b --job-file jobs/playstation.md --resume-file inputs/private/base_resume.tex
 ```
 
-`--pipeline` explicitly retrieves focused job evidence from the existing Chroma
-index, including project and course searches. It deduplicates and bounds evidence
-to at most 24 chunks, then runs a writer, deterministic validators, an independent
-grounding-review call, and compilation. This keeps retrieval and review steps
-under application control. A failed candidate gets at most two corrections.
+The existing `--pipeline` flag remains accepted, but this is now the default.
+The steps are:
 
-`--require-pdf` requires `pdflatex` on PATH and successful compilation. Install a
-LaTeX distribution containing the packages used in `templates/jakes_resume.tex`
-(for example MiKTeX or TeX Live) on the computer running the command. The runner
-disables shell escape. Without this flag it still compiles when `pdflatex` is
-available, otherwise reports compilation as `NOT_RUN`.
+1. Check input text and, when required, compiler availability.
+2. Segment the whole posting into requirement units; search every unit by
+   experience, project, skill, and course in the existing MiniLM Chroma index.
+3. Build a bounded selection plan with exact candidate-source quotes, relevant
+   projects/courses, and direct/partial/gap/context decisions. Invalid plans get
+   at most two repairs. Retrieval similarity alone is not a supported claim.
+4. Write the job-specific resume with that plan, the source facts, and Jake’s
+   template. Preserve dates and completion status; rephrase/prioritize supported
+   bullets and skills rather than copying the original resume wholesale.
+5. Check the template and selected factual invariants, then separately review
+   factual grounding and job relevance. A generic or unsupported draft gets at
+   most two corrections before export is rejected.
+6. Compile with pdflatex when available; `--require-pdf` makes it mandatory.
 
-Use your exact installed model tag, or set `RESUME_CHAT_MODEL` in `.env` and omit
-`--model`. Ollama is initialized with temperature 0 and a 16384-token context.
-Set `RESUME_OLLAMA_NUM_CTX` in `.env` to adjust context size for your available
-memory. Each correction retains the original inputs and latest rejected draft,
-rather than accumulating all previous drafts.
+Keep the local Ollama server running. Use your exact installed tag or set
+`RESUME_CHAT_MODEL` in `.env`. The existing context defaults to 16384 tokens;
+`RESUME_OLLAMA_NUM_CTX` can increase it if your hardware permits. Progress messages
+identify the active stage; local model calls may take several minutes.
 
-## Other generation modes
+## PDF setup
 
-Omit `--pipeline` to use the original Deep Agents orchestrator and specialist
-subagents. Its exported draft now passes the same external validation, grounding
-review, correction limit, and compilation gate. Rejected virtual drafts are
-removed before correction so stale files cannot count as a successful rewrite.
+Install MiKTeX or TeX Live and the packages in `templates/jakes_resume.tex`.
+`pdflatex` is found on PATH, or in standard Windows MiKTeX/MiKTeX2 folders.
+`RESUME_PDFLATEX` can name the executable explicitly. Reopen VS Code after changing
+Windows PATH. Missing required compilers fail before model inference.
 
-Use `--direct` to isolate writing from retrieval and subagents:
+The compiler runs without shell escape, with a 60-second timeout. MiKTeX's
+interactive package installer is disabled: install missing packages through
+MiKTeX Console according to the saved log. Without `--require-pdf`, the CLI still
+compiles when possible and reports `NOT_RUN` if no compiler is available. The UI
+can explicitly disable compilation with its PDF checkbox.
 
-```powershell
-python run_resume_agent.py --direct --require-pdf --model ollama:qwen3:8b --job-file jobs/playstation.md --resume-file inputs/private/base_resume.tex
-```
+## Alternate modes
 
-Direct mode uses the full source resume, posting, template, and rules. It still
-performs validation and a separate grounding review; it is not a full RAG test.
-`--direct` and `--pipeline` are mutually exclusive.
+`--agent` explicitly selects the earlier Deep Agents orchestrator.
+`--direct` isolates the writer from retrieval and planning. These diagnostic
+modes retain factual review and compilation but do not run the new selection-plan
+and tailoring-review stages. They are mutually exclusive with `--pipeline`.
 
-## Acceptance and diagnostics
+## Output and diagnostics
 
-Every run creates a fresh ignored `outputs/<timestamp>/` folder; existing output
-directories are rejected. Optional `--output-dir` must name a new directory.
+Each run creates a new ignored `outputs/<timestamp>/` directory. `--output-dir`
+may select another new directory; existing directories are rejected.
 
-- `response.md`: latest writer/agent response.
-- `attempt_1.md` through `attempt_3.md`: attempted responses.
-- `trace.json`: model/agent conversation for debugging.
-- `resume_evidence.md`: retrieved evidence when available.
-- `validation.json`: checks, reviewer decision, compiler status, and failures.
-- `optimized_resume.tex`: exported only after validation and review pass.
-- `optimized_resume.pdf`: exported only after actual successful compilation.
+| File | Purpose |
+| --- | --- |
+| `progress.json` | Current pipeline stage and progress message |
+| `retrieval.json` | All requirement searches and selected source IDs |
+| `resume_evidence.md` | Retrieved chunks with IDs and metadata |
+| `plan_attempt_*.md` | Raw selection-plan responses, including failed attempts |
+| `tailoring_plan.json` | Accepted cited plan, decisions, and evidence gaps |
+| `attempt_*.md`, `attempt_*.tex` | Diagnostic drafts; these are not accepted exports |
+| `response.md`, `trace.json` | Most recent writer response and input/output trace |
+| `compile_attempt_*.log` | Preserved compiler log, including errors/timeouts |
+| `validation.json` | Running/final status, stage, review and compiler results |
+| `optimized_resume.tex` | Exported only after acceptance checks pass |
+| `optimized_resume.pdf` | Exported only after actual successful compilation |
 
-Exit 0 means the export gate passed. Exit 2 means validation or clarification
-remains unresolved; inspect `validation.json` and `response.md`. Exit 1 means
-an input/index/provider/execution error; an error during generation is recorded
-in `validation.json`. No failed candidate gets an accepted .tex or PDF filename.
+`validation.json` is written before long review calls, so a response file is no
+longer the only sign of an interrupted run. Keyboard interruption is recorded as
+`INTERRUPTED` when Python can handle it; force-killing the process may leave the
+last `RUNNING` checkpoint. Earlier diagnostic drafts never count as a successful
+run. The UI retains successful downloads across reruns and hides them when inputs
+change until you generate a new result.
 
-The deterministic gate preserves the active Jake article preamble and checks
-section order/macros, Markdown contamination, percent escaping, supported
-percentages/GPA/years/contact links and emails, and incomplete documents. It
-extracts a single fenced LaTeX document when explanatory notes surround it.
+Exit 0 means the export gate passed. Exit 2 means unresolved validation. Exit 1
+means an input/index/model/execution error. Inspect the run's report and compiler
+log before rerunning. The job posting is never a source of candidate facts.
 
-The grounding reviewer separately checks claim attribution, dates, education,
-contacts, tools, metrics, and completion status. A malformed or contradictory
-review verdict fails closed. The job posting is never candidate evidence.
-Future graduation dates are allowed when source-supported. Malformed source
-metrics such as `35maintain` must not become `35%`.
-
-These checks do not prove every claim is true. Numeric presence does not prove
-correct attribution, LLM reviews can be wrong, and compilation does not prove
-layout quality or ATS performance. Inspect the final resume and its sources.
-
-## Reproducible tests
+## Tests
 
 ```powershell
 python -m unittest discover -v
@@ -95,21 +98,20 @@ $env:RESUME_LIVE_EMBEDDINGS = "1"
 python -m unittest tests.test_full_pipeline -v
 ```
 
-The default suite is offline for inference, using synthetic candidate facts,
-an in-memory tokenizer and test embedding provider where appropriate. Integration
-tests use actual SQLite, persistent Chroma, similarity retrieval, the real agent
-graph/backend, correction/validation/export code, and pdflatex. They also extract
-PDF text when pdftotext is installed. Compiler-dependent tests are explicitly
-skipped when pdflatex is missing.
+These exercise actual SQLite, Chroma, agent state, validation, UI interactions,
+PDF compilation and text extraction. Chat responses are simulated; the second
+command additionally uses actual MiniLM weights and tokenizer.
 
-The opt-in test downloads and uses actual MiniLM weights and tokenizer through
-the same indexing path. Chat generation and review remain simulated in both
-suites, so these are not claims about a live Ollama model's compliance. To verify
-your live model, run the validated RAG command above with your actual inputs and
-require a PASS report, grounding PASS, compilation PASS, and the exported PDF.
+To test live local inference across two different synthetic job descriptions:
 
-ChatGPT's hosted workspace cannot access the Ollama server running on your
-computer or your private local resume. A real local acceptance run is still
-required for that configuration. Outputs and traces contain personal data;
-keep the ignored folders out of Git.
+```powershell
+$env:RESUME_LIVE_CHAT_MODEL = "ollama:qwen3:8b"
+python -m unittest tests.test_live_acceptance -v
+```
 
+This opt-in test uses real MiniLM, Chroma, your local chat model and pdflatex. It
+requires differing relevant project selections, accepted grounding/tailoring
+reviews, preserved education dates, and two compiled PDFs. It can take several
+minutes. Then run the CLI/UI with your own job and source resume and inspect the
+result. Review checks are useful safeguards, not a proof of every factual claim,
+layout quality, or ATS performance.

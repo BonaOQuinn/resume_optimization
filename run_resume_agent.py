@@ -63,7 +63,8 @@ def main() -> None:
     modes.add_argument("--direct", action="store_true",
                         help="Test one-call LaTeX generation using the full source resume; skips retrieval and subagents.")
     modes.add_argument("--pipeline", action="store_true",
-                       help="Run explicit RAG retrieval, generation, validation, grounding review, and bounded correction.")
+                       help="Run the default job-tailored pipeline with retrieval, selection, review, and compilation.")
+    modes.add_argument("--agent", action="store_true", help="Use the legacy autonomous agent workflow.")
     parser.add_argument("--require-pdf", action="store_true",
                         help="Require successful pdflatex compilation before exporting an accepted draft.")
     parser.add_argument("--output-dir", type=Path,
@@ -82,17 +83,17 @@ def main() -> None:
         if args.direct:
             print("Running direct LaTeX generation test (no retrieval or subagents).", flush=True)
             saved = run_direct_resume_optimization(job, resume, output_directory, model=args.model, require_pdf=args.require_pdf)
-        elif args.pipeline:
-            print("Running validated RAG pipeline. Local inference may take several minutes.", flush=True)
-            saved = run_validated_pipeline(job, resume, output_directory, model=args.model, require_pdf=args.require_pdf)
+        elif not args.agent:
+            print("Running job-tailored RAG pipeline. Local inference may take several minutes.", flush=True)
+            saved = run_validated_pipeline(job, resume, output_directory, model=args.model, require_pdf=args.require_pdf,
+                                           progress=lambda stage, message: print(f"[{stage}] {message}", flush=True))
         else:
             if not get_resume_vector_store().get(limit=1, include=[])["ids"]:
                 raise ValueError("The resume collection is empty. Run python main.py first.")
             print("Running resume agent. Local inference may take several minutes.", flush=True)
             saved = run_resume_optimization(job, resume, output_directory, model=args.model, require_pdf=args.require_pdf)
     except Exception as error:
-        parser.exit(1, f"Resume run failed: {error}\n")
-    print(saved["response"].read_text(encoding="utf-8"))
+        parser.exit(1, f"Resume run failed: {error}\nRun diagnostics: {output_directory}\n")
     print(f"Agent response saved to {saved['response']}")
     if "latex" not in saved:
         parser.exit(2, "Validation did not pass. Read validation.json and response.md; no accepted draft was exported.\n")
