@@ -5,7 +5,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings #do not need anymore 
+
+from langchain_huggingface import HuggingFaceEmbeddings
+
 
 from backend.document_object import create_resume_documents
 from backend.prepare_documents import DEFAULT_DATABASE
@@ -14,13 +17,16 @@ from backend.prepare_documents import DEFAULT_DATABASE
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_PERSIST_DIRECTORY = PROJECT_ROOT / "backend" / "data" / "chroma"
 COLLECTION_NAME = "resume_collection"
-EMBEDDING_MODEL = "text-embedding-3-large"
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 def create_vector_store(persist_directory: Path = DEFAULT_PERSIST_DIRECTORY) -> Chroma:
     """Open (or create) the persistent Chroma collection for resume documents."""
     load_dotenv(PROJECT_ROOT / ".env")
-    embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
+    embeddings = HuggingFaceEmbeddings(
+        model=EMBEDDING_MODEL, 
+        encode_kwargs={"normalize_embeddings": True}
+    )
     return Chroma(
         collection_name=COLLECTION_NAME,
         embedding_function=embeddings,
