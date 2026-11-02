@@ -10,10 +10,13 @@ from langgraph.graph import END, START, StateGraph
 import agent as resume_agent
 
 
-def build_retrieval_graph(query, repetitions=1):
+def build_retrieval_graph(query, repetitions=1, item_type=None):
     """Exercise the actual state backend and its read-after-write behavior."""
     def retrieve(state):
-        outputs = [resume_agent.search_resume.invoke({"query": query})
+        args = {"query": query}
+        if item_type is not None:
+            args["item_type"] = item_type
+        outputs = [resume_agent.search_resume.invoke(args)
                    for _ in range(repetitions)]
         return {"messages": [AIMessage(content="\n".join(outputs))]}
 
@@ -71,6 +74,32 @@ class ResumeRetrievalTests(unittest.TestCase):
         self.assertIn("Chunk ID: career_item:2:chunk:0", evidence)
         self.assertIn("Built Python services for the team's users — with SQL.", evidence)
         self.assertIn("# Resume evidence: Python", evidence)
+
+    def test_courses_can_be_retrieved_explicitly_when_projects_are_not_applicable(self):
+        self.store.similarity_search.return_value = [
+            Document(
+                id="course:1:chunk:0",
+                page_content="Course: Machine Learning",
+                metadata={"item_type": "course", "name": "Machine Learning",
+                          "source_file": "relevant_courses.md", "parent_id": "course:1"},
+            )
+        ]
+        with patch.object(resume_agent, "get_resume_vector_store", return_value=self.store):
+            result = build_retrieval_graph("machine learning", item_type="course").invoke(
+                {"messages": [], "files": {}}
+            )
+        self.store.similarity_search.assert_called_once_with(
+            "machine learning", k=4, filter={"item_type": "course"}
+        )
+        self.assertIn("Course: Machine Learning", result["messages"][-1].content)
+
+    def test_empty_filtered_collection_reports_the_category(self):
+        self.store.similarity_search.return_value = []
+        with patch.object(resume_agent, "get_resume_vector_store", return_value=self.store):
+            message = resume_agent.search_resume.invoke(
+                {"query": "machine learning", "item_type": "course"}
+            )
+        self.assertIn("type 'course'", message)
 
     def test_empty_collection_does_not_try_to_write_files(self):
         self.store.similarity_search.return_value = []

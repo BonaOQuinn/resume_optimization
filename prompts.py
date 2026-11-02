@@ -1,7 +1,12 @@
 """Prompts for grounded resume refinement, with caller-supplied LaTeX rules."""
 
+from pathlib import Path
 from typing import Any, Literal
 
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_GUIDELINES_PATH = PROJECT_ROOT / "RESUME_GUIDELINES.md"
+DEFAULT_TEMPLATE_PATH = PROJECT_ROOT / "templates" / "jakes_resume.tex"
 
 OutputMode = Literal["latex_only", "latex_with_notes"]
 JOB_PATH = "/inputs/job.md"
@@ -44,7 +49,11 @@ Workflow:
    your full conversation automatically. Ask for supported claims, source paths,
    parent IDs, safe wording, and uncertainties. Combine findings into a fresh
    /work/resume_evidence.md for this job. Previous drafts are not factual sources.
-5. Select and reorder supported content by relevance. Improve clarity and
+5. Select supported content by relevance within the approved section order.
+   Search with item_type='project' to assess project applicability; use
+   item_type='course' when projects are unrelated or weak and coursework would
+   improve fit. Record the project/course inclusion decision in the evidence map.
+   Improve clarity and
    concision while retaining the original meaning and level of responsibility.
    Use job terminology only when source evidence supports the meaning.
 6. Apply the caller's LaTeX formatting guidelines exactly. If a template is
@@ -107,6 +116,10 @@ Read every path explicitly supplied in the task: the candidate .tex, evidence
 map, base resume, and job document. Missing inputs are review blockers.
 Review each candidate claim against its cited evidence, including identity,
 education, dates, employer/project attribution, metrics, and completion status.
+Check Education is first after the contact header, followed by Experience,
+Projects (when applicable), Technical Skills, and Relevant Courses (when needed).
+Check project/course relevance and the recorded inclusion/omission decision.
+Reject an empty Projects section or irrelevant projects added just to fill it.
 Check guideline/template compliance, relevance without keyword stuffing, and
 obvious LaTeX source problems such as missing document boundaries, unbalanced
 environments, unescaped inserted text, or damaged template macros.
@@ -122,14 +135,17 @@ Return findings to the orchestrator; do not modify the candidate or source files
 
 
 def build_resume_prompts(
-    latex_guidelines: str,
+    latex_guidelines: str | None = None,
     *,
     output_mode: OutputMode = "latex_with_notes",
     latex_template: str | None = None,
 ) -> tuple[str, list[dict[str, Any]]]:
-    """Build orchestrator and isolated-subagent prompts without assuming a style."""
-    if not isinstance(latex_guidelines, str) or not latex_guidelines.strip():
-        raise ValueError("Provide your LaTeX formatting guidelines before creating the agent.")
+    """Build prompts with the approved Jake layout and optional additional rules."""
+    required_guidelines = DEFAULT_GUIDELINES_PATH.read_text(encoding="utf-8")
+    if latex_guidelines is not None and (
+        not isinstance(latex_guidelines, str) or not latex_guidelines.strip()
+    ):
+        raise ValueError("Additional LaTeX guidelines must contain text or be omitted.")
     if output_mode not in ("latex_only", "latex_with_notes"):
         raise ValueError("output_mode must be 'latex_only' or 'latex_with_notes'.")
     if latex_template is not None and (
@@ -137,10 +153,18 @@ def build_resume_prompts(
     ):
         raise ValueError("latex_template must contain LaTeX source or be omitted.")
 
-    # Concatenate caller text once: LaTeX braces are not Python format fields.
-    formatting = "\n\nUSER LATEX FORMATTING GUIDELINES:\n" + latex_guidelines.strip()
-    if latex_template is not None:
-        formatting += "\n\nUSER LATEX TEMPLATE:\n" + latex_template
+    # Concatenate text once: LaTeX braces are not Python format fields.
+    if latex_template is None:
+        latex_template = DEFAULT_TEMPLATE_PATH.read_text(encoding="utf-8")
+    formatting = "\n\nREQUIRED PROJECT RESUME RULES:\n" + required_guidelines
+    if latex_guidelines is not None:
+        formatting += "\n\nADDITIONAL USER GUIDELINES:\n" + latex_guidelines.strip()
+    formatting += (
+        "\n\nFollow the approved Jake layout and section order. If additional "
+        "rules or a supplied template conflict with them, ask for clarification "
+        "instead of silently replacing the approved format."
+        "\n\nLATEX FORMATTING REFERENCE (not candidate evidence):\n" + latex_template
+    )
 
     if output_mode == "latex_only":
         output_contract = """

@@ -145,7 +145,9 @@ cache permissions; this public model can download without a token.
 Install the updated dependencies with `python -m pip install -r requirements.txt`.
 The root `agent.py` defines `search_resume` and its shared `backend`. It opens
 the existing MiniLM collection lazily on the first search and retrieves up to
-four chunks per query. It does not re-index or re-embed the stored documents;
+four chunks per query. The optional `item_type` argument filters to `experience`,
+`project`, `course`, or `skill`; use `course` to retrieve coursework explicitly.
+It does not re-index or re-embed the stored documents;
 only the search query is embedded.
 
 The tool writes each match under `/retrieved/resume/{batch_id}/chunk_N.md` with
@@ -189,11 +191,23 @@ the orchestrator's conversation. They use built-in filesystem tools; the custom
 `search_resume` tool stays with the orchestrator. The orchestrator and reviewer
 both receive the user's formatting rules and optional LaTeX template.
 
-No font, margins, page count, section order, or template is chosen by default.
-`create_resume_agent` requires nonempty `latex_guidelines`; it cannot create a
-fully configured agent until you provide them. Useful guidelines include page
-limit, paper size, fonts, margins, section order, bullet style, date/link formats,
-allowed packages/compiler, content constraints, and any exact template macros.
+The approved defaults are in `RESUME_GUIDELINES.md` and
+`templates/jakes_resume.tex`, based on the uploaded Jake's Resume example.
+They preserve its letterpaper/11pt article layout, active font setup, margins,
+headings, and custom commands. No page-count limit has been specified.
+
+After the contact header, sections follow Education, Experience, Projects,
+Technical Skills, and Relevant Courses. Education always comes first. Projects
+and Relevant Courses are conditional: omit unrelated projects, and include
+verified coursework when the available projects are unrelated or weak and
+coursework improves the match. Relevant Courses remains after Technical Skills.
+Omit optional sections entirely instead of leaving empty headings.
+
+`create_resume_agent(model=your_chat_model)` loads these defaults automatically.
+Optional `latex_guidelines` add further constraints; the approved layout and
+section order remain in both the orchestrator and reviewer prompts. Conflicting
+rules trigger a clarification rather than silently changing the format.
+An optional `latex_template` should be a compatible Jake-style variant.
 
 Return modes:
 - `latex_only`: the completed response is raw, complete LaTeX source without
@@ -214,8 +228,9 @@ from agent import create_resume_agent, prepare_resume_request
 
 resume_agent = create_resume_agent(
     model=your_chat_model,
-    latex_guidelines=your_guidelines_text,
-    latex_template=your_template_text,  # Optional; omit if no template.
+    # Optional additional constraints or a compatible Jake-style template:
+    # latex_guidelines=your_additional_rules,
+    # latex_template=your_template_text,
     output_mode="latex_only",
 )
 request = prepare_resume_request(
@@ -242,5 +257,11 @@ The prompts require factual grounding, preserve valid template commands while
 escaping inserted text, and request review before delivery. These are model
 instructions, not a deterministic guarantee. No LaTeX compiler or PDF exporter
 is connected yet, so the agent must not claim compilation, verified page fit,
-or PDF creation. A chosen chat model and real user guidelines are still required
+or PDF creation. A chosen chat model and complete source facts are still required
 to generate an actual optimized resume.
+
+The reusable template includes the original Jake template attribution and
+formatting macros, with empty content slots for verified candidate information.
+It does not supply candidate facts. Your original uploaded LaTeX can be provided
+as `base_resume` if it is your current factual resume; the agent still flags
+ambiguous dates/metrics instead of inferring corrections.

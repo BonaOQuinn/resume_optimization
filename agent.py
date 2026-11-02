@@ -6,6 +6,7 @@ StateBackend file operations must run inside an agent/graph execution.
 
 import json
 from functools import lru_cache
+from typing import Literal
 
 # Reuse the indexing configuration, including MiniLM, normalization, collection,
 # and project-local Hugging Face caches. Import it before other HF integrations.
@@ -31,7 +32,10 @@ def get_resume_vector_store():
 
 
 @tool(parse_docstring=True)
-def search_resume(query: str) -> str:
+def search_resume(
+    query: str,
+    item_type: Literal["experience", "project", "course", "skill"] | None = None,
+) -> str:
     """Search resume experience, projects, courses, and skills for relevant evidence.
 
     Save up to four matching chunks to the agent filesystem. Use focused
@@ -40,6 +44,7 @@ def search_resume(query: str) -> str:
 
     Args:
         query: Natural language search for resume evidence relevant to a job requirement.
+        item_type: Optional category filter: experience, project, course, or skill.
 
     Returns:
         Successfully saved file paths under /retrieved/resume/, or a status
@@ -49,8 +54,16 @@ def search_resume(query: str) -> str:
     if not query:
         return "Enter a job requirement or skill to search the resume."
 
-    retrieved_docs = get_resume_vector_store().similarity_search(query, k=4)
+    search_options = {"k": 4}
+    if item_type is not None:
+        search_options["filter"] = {"item_type": item_type}
+    retrieved_docs = get_resume_vector_store().similarity_search(query, **search_options)
     if not retrieved_docs:
+        if item_type is not None:
+            return (
+                f"No indexed resume chunks of type '{item_type}' found. "
+                "Try another query or check that those source records were indexed."
+            )
         return "No indexed resume chunks found. Run python main.py to index the resume first."
 
     # Use the full UUID: its first eight characters alone are time-based and
@@ -87,7 +100,7 @@ def search_resume(query: str) -> str:
 def create_resume_agent(
     model: str | BaseChatModel,
     *,
-    latex_guidelines: str,
+    latex_guidelines: str | None = None,
     output_mode: OutputMode = "latex_with_notes",
     latex_template: str | None = None,
 ):

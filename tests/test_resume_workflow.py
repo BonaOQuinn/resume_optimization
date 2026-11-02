@@ -7,7 +7,10 @@ from pydantic import Field
 from deepagents.backends.utils import file_data_to_string
 
 from agent import create_resume_agent, prepare_resume_request
-from prompts import BASE_RESUME_PATH, JOB_PATH, build_resume_prompts
+from prompts import (
+    BASE_RESUME_PATH, JOB_PATH, DEFAULT_GUIDELINES_PATH, DEFAULT_TEMPLATE_PATH,
+    build_resume_prompts,
+)
 
 
 class RecordingChatModel(FakeMessagesListChatModel):
@@ -26,7 +29,7 @@ class RecordingChatModel(FakeMessagesListChatModel):
 class ResumeWorkflowTests(unittest.TestCase):
     def test_missing_guidelines_and_bad_modes_fail_before_agent_creation(self):
         with patch("agent.create_deep_agent") as create:
-            for guidelines in ("", "   ", None):
+            for guidelines in ("", "   ", 42):
                 with self.assertRaises(ValueError):
                     create_resume_agent(model="unused:test", latex_guidelines=guidelines)
             with self.assertRaises(ValueError):
@@ -38,7 +41,9 @@ class ResumeWorkflowTests(unittest.TestCase):
 
     def test_latex_braces_and_rules_reach_orchestrator_and_reviewer_unchanged(self):
         guidelines = r"Keep \setlength{\parindent}{0pt} and use the template's section order."
-        template = r"\documentclass{article}" + "\n" + r"\newcommand{\entry}[2]{#1 & #2}"
+        template = DEFAULT_TEMPLATE_PATH.read_text(encoding="utf-8").replace(
+            r"\begin{document}", r"\newcommand{\entry}[2]{#1 & #2}" + "\n" + r"\begin{document}"
+        )
         instructions, agents = build_resume_prompts(
             guidelines, latex_template=template, output_mode="latex_only"
         )
@@ -61,8 +66,8 @@ class ResumeWorkflowTests(unittest.TestCase):
         model = RecordingChatModel(responses=[
             AIMessage(content="Please provide employment dates before I finish the resume.")
         ])
-        guidelines = "Preserve the supplied template and return complete LaTeX."
-        compiled = create_resume_agent(model=model, latex_guidelines=guidelines)
+        guidelines = DEFAULT_GUIDELINES_PATH.read_text(encoding="utf-8")
+        compiled = create_resume_agent(model=model)
         job = "Required: Python & SQL.\nPreferred: AWS."
         source = "Built Python services for the team's users — with SQL."
         result = compiled.invoke(prepare_resume_request(job, source))
