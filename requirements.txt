@@ -1,3 +1,5 @@
+deepagents>=0.7.32,<1
+langchain>=1,<2
 langchain-core>=1,<2
 langchain-chroma>=1,<2
 langchain-huggingface>=1,<2
