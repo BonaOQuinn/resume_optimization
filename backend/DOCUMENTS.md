@@ -77,7 +77,9 @@ The pipeline now runs in this order:
    `backend/data/chroma`.
 
 The first run downloads the public model and tokenizer from Hugging Face; later
-runs reuse the download cache. No OpenAI API key, credits, or Hugging Face
+runs reuse the project cache at `backend/data/huggingface`. Both the splitter's
+tokenizer and the embedding model use its `hub` subfolder; Xet data also stays
+inside the project cache. No OpenAI API key, credits, or Hugging Face
 inference subscription is required for this local embedding path. The optional
 root `.env` is still loaded for settings such as LangSmith tracing.
 
@@ -117,3 +119,23 @@ python -m unittest discover -s tests -v
 ```
 
 Model details: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+
+## Windows model-cache permissions
+
+If a previous run failed with `WinError 5` or `PermissionError` under
+`C:/Users/.../.cache/huggingface`, pull the latest code and restart
+`python main.py`. The application configures its project cache before importing
+Hugging Face libraries, because those libraries read cache settings at import
+time. It also passes the same cache folder explicitly to both model loaders.
+The inaccessible global cache does not need to be deleted or modified.
+
+To choose another writable folder, add this setting to your root `.env`:
+
+```dotenv
+RESUME_MODEL_CACHE=C:/Users/your-name/resume-model-cache
+```
+
+Relative paths are resolved from the repository root. Restart Python after
+changing the setting. The default `backend/data/huggingface/` folder is ignored
+by Git. A warning about unauthenticated Hugging Face requests is separate from
+cache permissions; this public model can download without a token.

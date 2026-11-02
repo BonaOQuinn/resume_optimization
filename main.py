@@ -4,10 +4,12 @@ import argparse
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# Configure caches before importing libraries that read Hugging Face settings.
+from backend.model_cache import get_model_cache_directory
+
 from langchain_chroma import Chroma
-
 from langchain_huggingface import HuggingFaceEmbeddings
-
 
 from backend.chunk_documents import EMBEDDING_MODEL, split_resume_documents
 from backend.document_object import create_resume_documents
@@ -24,6 +26,7 @@ def create_vector_store(persist_directory: Path = DEFAULT_PERSIST_DIRECTORY) -> 
     load_dotenv(PROJECT_ROOT / ".env")
     embeddings = HuggingFaceEmbeddings(
         model_name=EMBEDDING_MODEL,
+        cache_folder=get_model_cache_directory(),
         model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": True}
     )

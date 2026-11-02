@@ -3,3 +3,4 @@ __pycache__/
 backend/data/*.json
 backend/data/*.db*
 backend/data/chroma/
+backend/data/huggingface/

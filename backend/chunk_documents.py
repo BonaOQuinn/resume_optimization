@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from backend.model_cache import get_model_cache_directory
+
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from transformers import AutoTokenizer
@@ -34,7 +36,9 @@ def split_resume_documents(
     if len({document.id for document in documents}) != len(documents):
         raise ValueError("Source document IDs must be unique.")
     if tokenizer is None:
-        tokenizer = AutoTokenizer.from_pretrained(EMBEDDING_MODEL)
+        tokenizer = AutoTokenizer.from_pretrained(
+            EMBEDDING_MODEL, cache_dir=get_model_cache_directory()
+        )
 
     special_tokens = tokenizer.num_special_tokens_to_add(pair=False)
     if not 0 < chunk_size <= MODEL_MAX_TOKENS - special_tokens:
