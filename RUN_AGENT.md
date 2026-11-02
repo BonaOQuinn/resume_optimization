@@ -35,3 +35,29 @@ an agent review passed. It exports only the known output paths and keeps your
 original input files untouched. Inference uses the configured provider; an
 Ollama localhost server on your computer is not accessible from ChatGPT's
 hosted workspace.
+
+## Test LaTeX generation without delegation
+
+If the agent offers to review a resume or asks for inputs that were already
+supplied, isolate generation with the same complete source files:
+
+```powershell
+python run_resume_agent.py --direct --model ollama:qwen3:8b --job-file jobs/playstation.md --resume-file inputs/private/base_resume.tex
+```
+
+`--direct` sends the complete source resume, job posting, approved formatting
+rules, and template to the chat model in one request. It skips Chroma retrieval,
+filesystem tools, and subagents, so a populated index is not required for this
+test. It is a generation smoke test rather than a test of the full RAG workflow.
+Omit `--direct` to run the existing agent workflow.
+
+The runner saves `response.md` in a fresh `outputs/<timestamp>/` folder. It also
+saves `optimized_resume.tex` when the response contains a complete LaTeX
+document. One optional LaTeX code fence and separate completed thinking blocks
+are handled automatically. Clarifications, generic offers to help, and truncated
+documents produce exit status 2 without a `.tex` draft. This boundary check does
+not prove factual accuracy or compilation; review and compile the draft before
+using it. No retrieval evidence map or specialist review is produced in direct
+mode. If direct mode succeeds while agent mode fails, generation works for that
+input and the delegated workflow needs further investigation.
+

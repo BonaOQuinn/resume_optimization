@@ -6,6 +6,7 @@ from pathlib import Path
 
 from agent import create_resume_agent, get_resume_vector_store, prepare_resume_request
 from deepagents.backends.utils import file_data_to_string
+from direct_resume import run_direct_resume_optimization
 from prompts import EVIDENCE_PATH, LATEX_PATH
 
 
@@ -52,6 +53,8 @@ def main() -> None:
     parser.add_argument("--resume-file", type=Path, required=True,
                         help="Complete source resume, including contact, education, and dates; .md or .tex.")
     parser.add_argument("--model", help="provider:model; defaults to RESUME_CHAT_MODEL in .env")
+    parser.add_argument("--direct", action="store_true",
+                        help="Test one-call LaTeX generation using the full source resume; skips retrieval and subagents.")
     parser.add_argument("--output-dir", type=Path,
                         help="New directory for this run; existing directories are rejected.")
     args = parser.parse_args()
@@ -65,19 +68,24 @@ def main() -> None:
         prepare_resume_request(job, resume)  # Fail on missing text before loading models.
         if output_directory.exists():
             raise FileExistsError(f"Use a new output directory: {output_directory}")
-        if not get_resume_vector_store().get(limit=1, include=[])["ids"]:
-            raise ValueError("The resume collection is empty. Run python main.py first.")
-        print("Running resume agent. Local inference may take several minutes.", flush=True)
-        saved = run_resume_optimization(job, resume, output_directory, model=args.model)
+        if args.direct:
+            print("Running direct LaTeX generation test (no retrieval or subagents).", flush=True)
+            saved = run_direct_resume_optimization(job, resume, output_directory, model=args.model)
+        else:
+            if not get_resume_vector_store().get(limit=1, include=[])["ids"]:
+                raise ValueError("The resume collection is empty. Run python main.py first.")
+            print("Running resume agent. Local inference may take several minutes.", flush=True)
+            saved = run_resume_optimization(job, resume, output_directory, model=args.model)
     except Exception as error:
         parser.exit(1, f"Resume run failed: {error}\n")
     print(saved["response"].read_text(encoding="utf-8"))
     print(f"Agent response saved to {saved['response']}")
     if "latex" not in saved:
-        parser.exit(2, "No LaTeX draft was returned. Read the response for questions or blockers.\n")
+        parser.exit(2, "No complete LaTeX draft was saved. Read response.md for questions, incomplete output, or workflow failure.\n")
     print(f"LaTeX draft saved to {saved['latex']}")
     print("Review the agent response and draft before use. LaTeX compilation was not performed.")
 
 
 if __name__ == "__main__":
     main()
+
