@@ -11,6 +11,9 @@ from unittest.mock import patch
 
 from langchain_core.embeddings import Embeddings
 
+from backend.chunk_documents import split_resume_documents
+from tests.tokenizer_fixture import make_tokenizer
+
 import main as indexing
 
 
@@ -19,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class OfflineEmbeddings(Embeddings):
     def embed_documents(self, texts):
-        return [[float(len(text)), 1.0, 0.5] for text in texts]
+        return [[float(len(text)), 1.0, 0.5] + [0.0] * 381 for text in texts]
 
     def embed_query(self, text):
         return self.embed_documents([text])[0]
@@ -32,6 +35,13 @@ class IndexingTests(unittest.TestCase):
         self.folder = Path(self.temp.name)
         self.database = self.folder / "resume.db"
         self.persist_directory = self.folder / "chroma"
+        tokenizer = make_tokenizer()
+        patcher = patch.object(
+            indexing, "split_resume_documents",
+            side_effect=lambda docs: split_resume_documents(docs, tokenizer=tokenizer),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
         with sqlite3.connect(self.database) as connection:
             connection.executescript((ROOT / "backend/schema.sql").read_text())
 
@@ -54,7 +64,7 @@ class IndexingTests(unittest.TestCase):
             )
 
         # Only the external embedding provider is replaced; Chroma writes to disk.
-        with patch.object(indexing, "OpenAIEmbeddings", return_value=OfflineEmbeddings()):
+        with patch.object(indexing, "HuggingFaceEmbeddings", return_value=OfflineEmbeddings()):
             self.assertEqual(
                 indexing.index_resume_documents(self.database, self.persist_directory), 4
             )
@@ -66,14 +76,43 @@ class IndexingTests(unittest.TestCase):
             reopened = indexing.create_vector_store(self.persist_directory)
             saved = reopened.get(include=["documents", "metadatas", "embeddings"])
             self.assertEqual(set(saved["ids"]),
-                             {"career_item:1", "career_item:2", "course:1", "skill:1"})
+                             {"career_item:1:chunk:0", "career_item:2:chunk:0",
+                              "course:1:chunk:0", "skill:1:chunk:0"})
             self.assertEqual(len(saved["ids"]), 4)
             self.assertEqual(len(saved["embeddings"]), 4)
+            self.assertEqual(len(saved["embeddings"][0]), 384)
             self.assertTrue((self.persist_directory / "chroma.sqlite3").is_file())
-            position = saved["ids"].index("career_item:1")
+            position = saved["ids"].index("career_item:1:chunk:0")
             self.assertIn("Title: Senior Engineer", saved["documents"][position])
             self.assertNotIn("organization", saved["metadatas"][position])
             self.assertEqual(len(reopened.similarity_search("Python", k=1)), 1)
+
+    def test_shortening_a_source_removes_old_chunks_and_preserves_old_collection(self):
+        with sqlite3.connect(self.database) as connection:
+            connection.execute(
+                "INSERT INTO career_items VALUES (1, 'project', 'API', NULL, NULL, 'projects.md', 0)"
+            )
+            connection.execute(
+                "INSERT INTO bullets VALUES (1, 1, ?, 0)",
+                ("The team built an API for the users. " * 100,),
+            )
+        with patch.object(indexing, "HuggingFaceEmbeddings", return_value=OfflineEmbeddings()):
+            old = indexing.Chroma(
+                collection_name="resume_collection",
+                embedding_function=OfflineEmbeddings(),
+                persist_directory=str(self.persist_directory),
+            )
+            old.add_texts(["Old embedding collection"], ids=["old:1"])
+            first_count = indexing.index_resume_documents(self.database, self.persist_directory)
+            self.assertGreater(first_count, 1)
+            with sqlite3.connect(self.database) as connection:
+                connection.execute("UPDATE bullets SET text='The team built an API.'")
+            self.assertEqual(
+                indexing.index_resume_documents(self.database, self.persist_directory), 1
+            )
+            reopened = indexing.create_vector_store(self.persist_directory)
+            self.assertEqual(reopened.get()["ids"], ["career_item:1:chunk:0"])
+            self.assertEqual(old.get()["ids"], ["old:1"])
 
     def test_empty_and_missing_database_do_not_create_a_store(self):
         with patch.object(indexing, "create_vector_store") as create_store:

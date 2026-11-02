@@ -52,41 +52,68 @@ Run the document preparation checks:
 python -m unittest discover -s tests -p test_prepare_documents.py -v
 ```
 
-## Embed and store the resume documents
+## Split, embed, and store the resume documents
 
 From the repository root, with your virtual environment active:
 
 ```bash
 python -m pip install -r requirements.txt
-```
-
-Set `OPENAI_API_KEY` in the root `.env` file or in your environment. Then, after
-creating and populating `backend/data/resume.db`, run:
-
-```bash
 python main.py
 ```
 
-The command builds LangChain `Document` objects from SQLite, embeds their full
-text with `text-embedding-3-large`, and stores text, metadata, IDs, and vectors in
-the `resume_collection` Chroma collection at `backend/data/chroma`. Chroma
-persists automatically. The default SQLite, Chroma, and `.env` paths are based
-on the repository location. Custom paths can be passed with `--database PATH`
-and `--persist-directory PATH`.
+The SQLite database at `backend/data/resume.db` must already be populated.
+`--database PATH` selects another database, and `--persist-directory PATH`
+selects another Chroma storage directory.
 
-Importing `main` or running `python main.py --help` does not create an embedding
-client or index data. Missing databases fail with a helpful message; empty
-databases do not create a vector store.
+The pipeline now runs in this order:
 
-Running the command again re-embeds every document, so it makes additional API
-calls. Matching IDs are updated instead of duplicated. Deleted SQLite records
-are not automatically removed from Chroma. Keep the same embedding model when
-querying this collection. API credentials and the default generated data paths
-are ignored by Git.
+1. Read jobs, projects, courses, and skills from SQLite.
+2. Convert the prepared records into LangChain `Document` objects.
+3. Split longer documents with `RecursiveCharacterTextSplitter`, measuring
+   length with the MiniLM tokenizer rather than character counts.
+4. Embed each chunk locally with `sentence-transformers/all-MiniLM-L6-v2`
+   on the CPU, with normalized output vectors.
+5. Save the chunks to the new `resume_minilm_l6_v2_chunks` collection inside
+   `backend/data/chroma`.
 
-Run all checks, including indexing with temporary data and local test embeddings
-(no OpenAI API calls):
+The first run downloads the public model and tokenizer from Hugging Face; later
+runs reuse the download cache. No OpenAI API key, credits, or Hugging Face
+inference subscription is required for this local embedding path. The optional
+root `.env` is still loaded for settings such as LangSmith tracing.
+
+The model produces 384-dimensional vectors and has about 22.7 million parameters.
+Its default input limit is 256 word pieces. Chunks target 220 content tokens
+with up to 30 tokens of overlap, preferring paragraph, line, and word boundaries.
+Short documents usually remain a single chunk. Every final chunk is checked
+including special tokens against the 256-token limit before embedding, so an
+oversized chunk fails instead of being silently truncated. Sentences and common
+words remain in the text; no keyword extraction or stemming is applied.
+
+Each chunk keeps its original metadata and adds `parent_id`, `chunk_index`,
+`chunk_count`, and `token_count` (including model special tokens). Chunk IDs
+look like `career_item:3:chunk:0`. The parent ID maps back to the source SQLite
+record. `split_resume_documents(documents)` in `backend/chunk_documents.py` can
+also be used directly with an existing list of LangChain documents.
+
+The existing `resume_collection` is preserved. Do not mix vectors from different
+embedding models in one collection, even if their dimensions happen to match.
+Query the new collection with the same MiniLM model and normalization settings;
+`create_vector_store()` in `main.py` opens it with those settings.
+
+Each run recomputes embeddings locally and updates matching chunk IDs. Surplus
+chunks for shortened source documents are removed only after their replacement
+chunks are saved successfully. Parents deleted entirely from SQLite are not
+automatically removed. Empty source databases leave any existing store unchanged.
+There is no external embedding API charge for rerunning, but it uses local CPU.
+
+Importing `main` or requesting `python main.py --help` does not download a model
+or index data. Generated SQLite/Chroma data and API credentials are ignored by Git.
+
+Run the checks with an in-memory tokenizer, temporary databases, and local test
+embeddings (no model downloads or API calls):
 
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+Model details: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2

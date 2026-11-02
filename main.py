@@ -5,26 +5,26 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings #do not need anymore 
 
 from langchain_huggingface import HuggingFaceEmbeddings
 
 
+from backend.chunk_documents import EMBEDDING_MODEL, split_resume_documents
 from backend.document_object import create_resume_documents
 from backend.prepare_documents import DEFAULT_DATABASE
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_PERSIST_DIRECTORY = PROJECT_ROOT / "backend" / "data" / "chroma"
-COLLECTION_NAME = "resume_collection"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+COLLECTION_NAME = "resume_minilm_l6_v2_chunks"
 
 
 def create_vector_store(persist_directory: Path = DEFAULT_PERSIST_DIRECTORY) -> Chroma:
     """Open (or create) the persistent Chroma collection for resume documents."""
     load_dotenv(PROJECT_ROOT / ".env")
     embeddings = HuggingFaceEmbeddings(
-        model=EMBEDDING_MODEL, 
+        model_name=EMBEDDING_MODEL,
+        model_kwargs={"device": "cpu"},
         encode_kwargs={"normalize_embeddings": True}
     )
     return Chroma(
@@ -38,10 +38,11 @@ def index_resume_documents(
     database_path: Path = DEFAULT_DATABASE,
     persist_directory: Path = DEFAULT_PERSIST_DIRECTORY,
 ) -> int:
-    """Embed all resume documents and upsert them using their source IDs.
+    """Split and embed resume documents, returning the number of stored chunks.
 
-    Running again re-embeds the documents and updates matching IDs. This does
-    not remove vectors for records that have been deleted from SQLite.
+    Running again updates matching chunk IDs and removes surplus chunks for
+    the indexed parents after the new embeddings are stored successfully.
+    This does not remove parents that have been deleted from SQLite.
     """
     database_path = Path(database_path).resolve()
     if not database_path.is_file():
@@ -54,12 +55,21 @@ def index_resume_documents(
     if not documents:
         return 0
 
+    chunks = split_resume_documents(documents)
+    if not chunks:
+        return 0
     vector_store = create_vector_store(persist_directory)
-    vector_store.add_documents(
-        documents=documents,
-        ids=[str(document.id) for document in documents],
-    )
-    return len(documents)
+    # Clean up shortened documents only after the replacement chunks are saved.
+    previous_ids = vector_store.get(
+        where={"parent_id": {"$in": [str(document.id) for document in documents]}},
+        include=[],
+    )["ids"]
+    chunk_ids = [str(chunk.id) for chunk in chunks]
+    vector_store.add_documents(documents=chunks, ids=chunk_ids)
+    obsolete_ids = sorted(set(previous_ids) - set(chunk_ids))
+    if obsolete_ids:
+        vector_store.delete(ids=obsolete_ids)
+    return len(chunks)
 
 
 def main() -> None:
@@ -77,7 +87,7 @@ def main() -> None:
         print("No resume documents found; nothing was added to Chroma.")
     else:
         print(
-            f"Embedded and stored {count} resume documents in the "
+            f"Embedded and stored {count} resume chunks in the "
             f"'{COLLECTION_NAME}' collection at {args.persist_directory.resolve()}."
         )
 
