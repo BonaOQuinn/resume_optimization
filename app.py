@@ -69,6 +69,12 @@ def show_result(saved, output):
         st.json(report)
         if report_path.exists():
             st.download_button("Download validation report", report_path.read_bytes(), "validation.json", "application/json")
+        catalog_path = output / "evidence_catalog.json"
+        if catalog_path.exists():
+            st.download_button("Download source evidence catalog", catalog_path.read_bytes(), catalog_path.name, "application/json")
+        plans = sorted(output.glob("plan_attempt_*.md"))
+        if plans:
+            st.download_button("Download latest planning response", plans[-1].read_bytes(), plans[-1].name, "text/markdown")
         logs = sorted(output.glob("compile_attempt_*.log"))
         if logs:
             st.download_button("Download compiler log", logs[-1].read_bytes(), logs[-1].name, "text/plain")
@@ -84,10 +90,14 @@ def main():
         st.subheader("Your source resume")
         st.caption("Keep your contact details, education, dates, and current experience in this source.")
         upload = st.file_uploader("Upload a source resume", type=["tex", "md", "txt"])
-        if DEFAULT_RESUME.is_file() and upload is None:
-            st.caption("Using inputs/private/base_resume.tex unless you paste a replacement below.")
         with st.expander("Or paste source text"):
             pasted = st.text_area("Source resume text", height=180, key="source_text")
+        if upload is not None:
+            st.caption(f"Using uploaded resume: {upload.name}")
+        elif pasted.strip():
+            st.caption("Using the source resume text you pasted.")
+        elif DEFAULT_RESUME.is_file():
+            st.caption("Using inputs/private/base_resume.tex.")
         with st.expander("Generation settings"):
             model = st.text_input("Chat model", value=os.getenv("RESUME_CHAT_MODEL") or "ollama:qwen3:8b", key="model")
             require_pdf = st.checkbox("Generate PDF too", value=True, key="require_pdf")

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from prompts import DEFAULT_GUIDELINES_PATH, DEFAULT_TEMPLATE_PATH, FACTUALITY_RULES
 from resume_validation import extract_complete_latex, validate_and_export, candidate_source_text, active_tex
+from evidence_catalog import selected_name_supported
 
 
 def run_direct_resume_optimization(
@@ -45,10 +46,12 @@ def run_direct_resume_optimization(
     writer_evidence = evidence_documents
     if tailoring_plan is not None:
         cited = {e["source_id"] for m in tailoring_plan["requirements"] for e in m["evidence"]}
-        selected_names = tailoring_plan["projects"]["include"] + tailoring_plan["courses"]["include"]
+        cited.update(r["source_id"] for section in ("projects", "courses")
+                     for r in tailoring_plan[section].get("selected_records", []))
         writer_evidence = [e for e in evidence_documents
                            if e.splitlines()[0].removeprefix("Chunk ID: ") in cited
-                           or any(name.casefold() in e.casefold() for name in selected_names)]
+                           or any(selected_name_supported(name, section, {"chunk": e})
+                                  for section in ("projects", "courses") for name in tailoring_plan[section]["include"])]
     inputs = {"job_posting": job_document, "source_resume": candidate_source_text(base_resume),
               "retrieved_candidate_evidence": writer_evidence}
     if tailoring_plan is not None:

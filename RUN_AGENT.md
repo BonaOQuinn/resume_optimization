@@ -24,8 +24,10 @@ The steps are:
 1. Check input text and, when required, compiler availability.
 2. Segment the whole posting into requirement units; search every unit by
    experience, project, skill, and course in the existing MiniLM Chroma index.
-3. Build a bounded selection plan with exact candidate-source quotes, relevant
-   projects/courses, and direct/partial/gap/context decisions. Invalid plans get
+3. Build a bounded selection plan by selecting evidence/project/course IDs from
+   a source catalog. The application attaches original quotes and canonical course
+   labels; the model does not transcribe LaTeX or join course fields. The plan
+   records direct/partial/gap/context decisions. Invalid plans get
    at most two repairs. Retrieval similarity alone is not a supported claim.
 4. Write the job-specific resume with that plan, the source facts, and Jake’s
    template. Preserve dates and completion status; rephrase/prioritize supported
@@ -70,7 +72,9 @@ may select another new directory; existing directories are rejected.
 | `progress.json` | Current pipeline stage and progress message |
 | `retrieval.json` | All requirement searches and selected source IDs |
 | `resume_evidence.md` | Retrieved chunks with IDs and metadata |
+| `evidence_catalog.json` | Source-owned evidence IDs, raw excerpts, readable text, and paired course records |
 | `plan_attempt_*.md` | Raw selection-plan responses, including failed attempts |
+| `plan_validation_*.json` | Specific validation failures for each planning attempt |
 | `tailoring_plan.json` | Accepted cited plan, decisions, and evidence gaps |
 | `attempt_*.md`, `attempt_*.tex` | Diagnostic drafts; these are not accepted exports |
 | `response.md`, `trace.json` | Most recent writer response and input/output trace |
@@ -115,3 +119,9 @@ reviews, preserved education dates, and two compiled PDFs. It can take several
 minutes. Then run the CLI/UI with your own job and source resume and inspect the
 result. Review checks are useful safeguards, not a proof of every factual claim,
 layout quality, or ATS performance.
+
+Legacy plans with literal quotations are accepted only when wording matches after
+normalizing display markup, whitespace, Unicode quotes/dashes, and LaTeX escapes.
+No fuzzy matching or inferred qualifications are used. A selected course code
+and name must come from the same course record. Run details exposes downloads
+for the evidence catalog and latest planner response when diagnosis is needed.

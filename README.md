@@ -45,7 +45,9 @@ candidate sources; with a local Ollama model, inference runs locally.
 The pipeline segments the entire posting, including short skill requirements and
 requirements near the end. It searches each requirement across experience,
 projects, skills, and courses using the same MiniLM index. A bounded set of ranked
-chunks enters a selection plan with exact source quotes. The writer uses that
+chunks becomes an evidence catalog. The planner selects evidence, project, and
+course IDs; the application attaches the original source excerpts and labels.
+Course codes and names are validated together against their source record. The writer uses that
 plan to prioritize supported bullets, choose applicable projects, and emphasize
 relevant skills. Unsupported qualifications stay in the external gap report.
 

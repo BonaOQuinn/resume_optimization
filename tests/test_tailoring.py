@@ -39,6 +39,18 @@ class FakeStore:
 
 
 class TailoringTests(unittest.TestCase):
+    def test_selected_course_record_reaches_writer_with_noncontiguous_label(self):
+        from direct_resume import run_direct_resume_optimization
+        evidence = "Chunk ID: course:1:chunk:0\nType: course\nCourse code: CS577\nCourse: Data Science\nCategory: AI"
+        plan = plan_for()
+        plan["courses"]["include"] = ["CS577: Data Science"]
+        model = RecordingChatModel(responses=[AIMessage(content=LATEX), AIMessage(content=PASS), AIMessage(content=PASS)])
+        with tempfile.TemporaryDirectory() as directory:
+            run_direct_resume_optimization("Python SQL", SOURCE, Path(directory) / "run", model=model,
+                                           evidence_documents=[evidence], tailoring_plan=plan, compile_pdf=False)
+        payload = json.loads(model.seen[0][1].content.split("\n", 1)[1])
+        self.assertEqual(payload["retrieved_candidate_evidence"], [evidence])
+
     def test_rare_late_requirement_is_retained_beside_frequent_generic_matches(self):
         class RankedStore:
             def similarity_search(self, query, **kwargs):

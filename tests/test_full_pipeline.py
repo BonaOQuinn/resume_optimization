@@ -62,7 +62,14 @@ class FullPipelineTests(unittest.TestCase):
                     saved = run_resume_optimization("Required: Python SQL backend engineering.", SOURCE, root / "run", model=model, require_pdf=True)
             else:
                 bad = LATEX.replace("{article}", "{moderncv}").replace(r"18\%", r"35\%")
-                model = RecordingChatModel(responses=[AIMessage(content=json.dumps(plan_for())), AIMessage(content=bad), AIMessage(content=LATEX), AIMessage(content=PASS), AIMessage(content=PASS)])
+                plan = plan_for()
+                plan["requirements"][0].pop("evidence")
+                plan["requirements"][0]["evidence_ids"] = ["E001"]
+                plan["projects"].pop("include")
+                plan["projects"]["include_ids"] = ["P001"]
+                plan["courses"].pop("include")
+                plan["courses"]["include_ids"] = []
+                model = RecordingChatModel(responses=[AIMessage(content=json.dumps(plan)), AIMessage(content=bad), AIMessage(content=LATEX), AIMessage(content=PASS), AIMessage(content=PASS)])
                 saved = run_validated_pipeline("Required: Python SQL backend engineering.", SOURCE, root / "run", model=model, vector_store=store, require_pdf=True)
             report = json.loads(saved["validation"].read_text())
             self.assertEqual(report["status"], "PASS")
@@ -84,7 +91,7 @@ class FullPipelineTests(unittest.TestCase):
             self.assertTrue((saved["latex"].parent / "trace.json").exists())
             if not agent_mode:
                 self.assertEqual(len(report["attempts"]), 2)
-                self.assertIn("candidate_sources", str(model.seen[0]))
+                self.assertIn("evidence_catalog", str(model.seen[0]))
                 self.assertIn("selection_plan", str(model.seen[1]))
                 self.assertEqual(report["attempts"][-1]["tailoring"], "PASS")
 

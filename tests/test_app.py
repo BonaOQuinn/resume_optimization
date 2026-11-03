@@ -13,6 +13,15 @@ APP = Path(__file__).resolve().parents[1] / "app.py"
 
 
 class AppTests(unittest.TestCase):
+    def test_upload_takes_precedence_over_pasted_and_default_sources(self):
+        from app import read_source
+        class Upload:
+            name, size = "main.tex", 20
+            def getvalue(self):
+                return b"Uploaded candidate"
+        self.assertEqual(read_source(Upload(), "Pasted candidate"), "Uploaded candidate")
+        self.assertEqual(read_source(None, "Pasted candidate"), "Pasted candidate")
+
     def test_empty_job_shows_actionable_error(self):
         app = AppTest.from_file(str(APP)).run()
         self.assertEqual(len(app.exception), 0)

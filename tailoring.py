@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 from prompts import DEFAULT_GUIDELINES_PATH, FACTUALITY_RULES
+from evidence_catalog import build_catalog, materialize_plan, contains_quote, selected_name_supported
 
 
 def parse_json_response(raw):
@@ -83,44 +84,52 @@ def validate_plan(plan, requirements, sources):
             source_id, quote = citation.get("source_id"), citation.get("quote")
             if not isinstance(source_id, str) or source_id not in sources:
                 issues.append(f"Unknown candidate source: {source_id!r}.")
-            elif not isinstance(quote, str) or len(quote.strip()) < 8 or compact(quote) not in compact(sources[source_id]):
-                issues.append(f"Citation for {source_id} must quote an exact, meaningful passage from that candidate source.")
+            elif not isinstance(quote, str) or not contains_quote(quote, sources[source_id]):
+                issues.append(f"{match.get('id')}: citation for {source_id} changes or omits source wording; select an evidence ID from the catalog.")
     for section in ("projects", "courses"):
         decision = plan.get(section)
         if not isinstance(decision, dict) or not isinstance(decision.get("include"), list) or not isinstance(decision.get("reason"), str) or not decision["reason"].strip():
             issues.append(f"{section}: provide include (array of names) and reason (nonempty string).")
             continue
         for name in decision["include"]:
-            if not isinstance(name, str) or not name.strip() or not any(compact(name) in compact(s) for s in sources.values()):
+            if not selected_name_supported(name, section, sources):
                 issues.append(f"{section}: selected name {name!r} does not occur in candidate sources.")
-    return issues
+    return list(dict.fromkeys(issues))
 
 
 def build_tailoring_plan(model, job, base_resume, evidence, requirements, output_directory, progress=None):
     sources = {"base_resume": base_resume, **evidence}
+    catalog = build_catalog(sources)
+    (Path(output_directory) / "evidence_catalog.json").write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding="utf-8")
+    model_catalog = {**catalog, "evidence": {eid: {k: v for k, v in entry.items() if k != "quote"}
+                                            for eid, entry in catalog["evidence"].items()}}
     system = (
         "Plan a truthful job-specific resume. Return ONLY a JSON object. "
         "Evaluate ALL requirement IDs. Classify employer descriptions as context, "
         "unsupported qualifications as gap, transferable evidence as partial, and "
         "only directly supported qualifications as direct. Do not confuse candidate "
-        "facts with job requirements. Use exact quotations, preserving punctuation "
-        "and LaTeX escapes. Gaps do not block a resume. Keep base_resume dates, "
+        "facts with job requirements. Select evidence IDs from the supplied catalog; "
+        "the application attaches the exact original quotations. Do not transcribe "
+        "quotations or invent IDs. Select project IDs and course IDs from their "
+        "catalogs; do not construct or rename course labels. Gaps do not block a resume. Keep base_resume dates, "
         "identity and education authoritative. For compound requirements, partial "
         "support is appropriate if only part is documented. Prioritize and rephrase "
         "relevant experience, select applicable projects, order supported skills by "
         "relevance. Do not merely copy the source resume. Decide explicitly whether "
         "coursework is useful given the selected projects. "
         'Schema: {"requirements":[{"id":"R1","support":"direct|partial|gap|context",'
-        '"evidence":[{"source_id":"base_resume or supplied chunk ID","quote":"exact source passage"}],'
+        '"evidence_ids":["E001"],'
         '"action":"specific supported resume emphasis, or missing qualification"}],'
-        '"projects":{"include":["exact project title"],"reason":"why selected or omitted"},'
-        '"courses":{"include":["exact course name/code"],"reason":"why useful given project strength, or why omitted"}}. '
-        "Every ID must appear exactly once. For gap/context use evidence: [].\n\n"
+        '"projects":{"include_ids":["P001"],"reason":"why selected or omitted"},'
+        '"courses":{"include_ids":["C001"],"reason":"why useful given project strength, or why omitted"}}. '
+        "Example IDs are not facts: only use IDs actually present in the catalog. "
+        "Every requirement ID must appear exactly once. For gap/context use evidence_ids: []. "
+        "If no applicable projects or courses exist, use include_ids: [].\n\n"
         + FACTUALITY_RULES + "\n\n" + DEFAULT_GUIDELINES_PATH.read_text(encoding="utf-8")
     )
     original = [
         {"role": "system", "content": system},
-        {"role": "user", "content": json.dumps({"job_posting": job, "requirements": requirements, "candidate_sources": sources}, ensure_ascii=False)},
+        {"role": "user", "content": json.dumps({"job_posting": job, "requirements": requirements, "evidence_catalog": model_catalog}, ensure_ascii=False)},
     ]
     messages = original
     for attempt in range(3):
@@ -129,10 +138,13 @@ def build_tailoring_plan(model, job, base_resume, evidence, requirements, output
         raw = model.invoke(messages).text
         (Path(output_directory) / f"plan_attempt_{attempt + 1}.md").write_text(raw, encoding="utf-8")
         try:
-            plan = parse_json_response(raw)
+            plan = materialize_plan(parse_json_response(raw), catalog)
             issues = validate_plan(plan, requirements, sources)
-        except (ValueError, TypeError):
+        except json.JSONDecodeError:
             plan, issues = None, ["Return valid JSON following the supplied plan schema."]
+        except (ValueError, TypeError) as error:
+            plan, issues = None, [str(error)]
+        (Path(output_directory) / f"plan_validation_{attempt + 1}.json").write_text(json.dumps({"issues": issues}, ensure_ascii=False, indent=2), encoding="utf-8")
         if not issues:
             # Save original requirement wording beside the decision, never replace
             # the employer's needs with an inferred or model-rewritten version.
