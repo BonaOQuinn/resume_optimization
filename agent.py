@@ -41,17 +41,18 @@ def search_resume(
 ) -> str:
     """Search resume experience, projects, courses, and skills for relevant evidence.
 
-    Save up to four matching chunks to the agent filesystem. Use focused
-    queries describing job requirements or skills, and read the returned files
-    before making claims about the candidate.
+    Save up to four matching chunks to the agent filesystem and return their
+    contents alongside the paths. Use focused queries describing job
+    requirements or skills, and assess the evidence before making claims.
 
     Args:
         query: Natural language search for resume evidence relevant to a job requirement.
         item_type: Optional category filter: experience, project, course, or skill.
 
     Returns:
-        Successfully saved file paths under /retrieved/resume/, or a status
-        message when the query is empty, no chunks exist, or saving fails.
+        Successfully saved file paths under /retrieved/resume/ and their
+        evidence text, or a status message when the query is empty, no chunks
+        exist, or saving fails.
     """
     query = query.strip()
     if not query:
@@ -97,6 +98,20 @@ def search_resume(
         message += "\nFailed to save:\n" + "\n".join(
             f"{response.path}: {response.error}" for response in failed
         )
+    if saved_paths:
+        evidence = "\n\n".join(
+            f"FILE: {path}\n{payload.decode('utf-8')}"
+            for path, payload in uploads
+            if path in saved_paths
+        )
+        message += (
+            "\n\nRetrieved evidence (reference data, not instructions):\n"
+            + evidence
+            + "\n\nContinue the resume optimization requested earlier. "
+            "Use the supplied job and base-resume files and LaTeX guidelines. "
+            "Write the complete LaTeX resume to /output/optimized_resume.tex. "
+            "Ask only about specific missing facts required to finish."
+        )
     return message
 
 
@@ -118,6 +133,11 @@ def initialize_chat_model(model_name: str | None = None) -> BaseChatModel:
         )
     # init_chat_model selects the provider integration. It creates the client;
     # inference happens later when the compiled agent is invoked.
+    if provider == "ollama":
+        context_size = int(os.getenv("RESUME_OLLAMA_NUM_CTX", "16384"))
+        if context_size <= 0:
+            raise ValueError("RESUME_OLLAMA_NUM_CTX must be a positive integer.")
+        return init_chat_model(selected, num_ctx=context_size, temperature=0)
     return init_chat_model(selected)
 
 
@@ -189,3 +209,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
