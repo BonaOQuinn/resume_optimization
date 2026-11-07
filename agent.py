@@ -137,8 +137,45 @@ def initialize_chat_model(model_name: str | None = None) -> BaseChatModel:
         context_size = int(os.getenv("RESUME_OLLAMA_NUM_CTX", "16384"))
         if context_size <= 0:
             raise ValueError("RESUME_OLLAMA_NUM_CTX must be a positive integer.")
-        return init_chat_model(selected, num_ctx=context_size, temperature=0)
+        # reasoning=False disables Qwen-style <think> output, which otherwise
+        # multiplies CPU inference time and consumes the context window.
+        return init_chat_model(selected, num_ctx=context_size, temperature=0, reasoning=False)
+    if provider == "anthropic":
+        if not os.getenv("ANTHROPIC_API_KEY", "").strip():
+            raise ValueError(
+                "Set ANTHROPIC_API_KEY in .env to use " + selected + ". "
+                "Create a key at https://console.anthropic.com/settings/keys."
+            )
+        # A full resume body plus JSON plans fit well within 16K output tokens.
+        # Do not send temperature or a thinking override: current Claude
+        # models reject sampling parameters and keep adaptive thinking on.
+        return init_chat_model(selected, max_tokens=16000, timeout=300, max_retries=2)
     return init_chat_model(selected)
+
+
+def check_chat_model_available(model_name: str | None = None) -> None:
+    """Fail fast with an actionable message when a local Ollama model is missing.
+
+    Hosted providers are validated by their first request; this check avoids a
+    long wait followed by a generic llama-server/HTTP error for local models.
+    """
+    selected = (model_name if model_name is not None else os.getenv("RESUME_CHAT_MODEL") or "").strip()
+    provider, _, name = selected.partition(":")
+    if provider != "ollama" or not name:
+        return
+    import urllib.error
+    import urllib.request
+    host = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    if not host.startswith("http"):
+        host = "http://" + host
+    try:
+        with urllib.request.urlopen(host + "/api/tags", timeout=5) as response:
+            installed = {m.get("name") for m in json.load(response).get("models", [])}
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        raise ValueError(f"Ollama is not reachable at {host}. Start Ollama, or choose a hosted model. ({error})") from error
+    if name not in installed and f"{name}:latest" not in installed:
+        available = ", ".join(sorted(m for m in installed if m)) or "none"
+        raise ValueError(f"Ollama model '{name}' is not installed (installed: {available}). Run: ollama pull {name}")
 
 
 def create_resume_agent(

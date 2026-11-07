@@ -14,6 +14,7 @@ from resume_validation import find_latex_compiler
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_RESUME = ROOT / "inputs" / "private" / "base_resume.tex"
+DEFAULT_MODEL = "anthropic:claude-opus-5-5"
 load_dotenv(ROOT / ".env")
 
 
@@ -51,7 +52,13 @@ def show_result(saved, output):
         attempts = report.get("attempts", [])
         if attempts:
             for issue in attempts[-1].get("issues", []):
-                st.write("• " + issue)
+                if issue != report.get("error"):
+                    st.write("• " + issue)
+        if "unverified_latex" in saved:
+            st.warning("The draft passed every review but could not be compiled on this computer. "
+                       "You can download the LaTeX and compile it elsewhere (for example Overleaf).")
+            st.download_button("Download reviewed LaTeX (not compiled)", saved["unverified_latex"].read_bytes(),
+                               "optimized_resume.tex", "application/x-tex")
 
     plan_path = output / "tailoring_plan.json"
     if plan_path.exists():
@@ -87,23 +94,11 @@ def main():
     st.caption("Your approved Jake’s Resume layout · Your recorded facts · A clear match to the role")
 
     with st.sidebar:
-        st.subheader("Your source resume")
-        st.caption("Keep your contact details, education, dates, and current experience in this source.")
-        upload = st.file_uploader("Upload a source resume", type=["tex", "md", "txt"])
-        with st.expander("Or paste source text"):
-            pasted = st.text_area("Source resume text", height=180, key="source_text")
-        if upload is not None:
-            st.caption(f"Using uploaded resume: {upload.name}")
-        elif pasted.strip():
-            st.caption("Using the source resume text you pasted.")
-        elif DEFAULT_RESUME.is_file():
-            st.caption("Using inputs/private/base_resume.tex.")
-        with st.expander("Generation settings"):
-            model = st.text_input("Chat model", value=os.getenv("RESUME_CHAT_MODEL") or "ollama:qwen3:8b", key="model")
-            require_pdf = st.checkbox("Generate PDF too", value=True, key="require_pdf")
-            st.caption("The existing all-MiniLM-L6-v2 embedding index is used for retrieval.")
-            if require_pdf and not find_latex_compiler():
-                st.info("pdflatex is unavailable. Install MiKTeX or uncheck PDF to generate LaTeX.")
+        st.subheader("Resume Studio")
+        st.caption("Fill in the job description and press Generate. Inputs are only read when you "
+                   "press Generate, so editing them cannot interrupt a run in progress.")
+        if not find_latex_compiler():
+            st.info("pdflatex is unavailable. Install MiKTeX or uncheck PDF to generate LaTeX only.")
         with st.expander("Update your experience index"):
             st.caption("After updating your SQLite resume database, refresh the existing MiniLM index.")
             if st.button("Refresh index"):
@@ -115,8 +110,22 @@ def main():
                 except Exception as error:
                     st.error(str(error))
 
-    job = st.text_area("Job description", height=320, max_chars=30000,
-                       placeholder="Paste the responsibilities, qualifications, and preferred skills from the posting…", key="job")
+    # A form batches widget changes until submission. Without it, any keystroke
+    # or click during a multi-minute generation reruns the script and aborts it.
+    with st.form("generate_form", border=False):
+        job = st.text_area("Job description", height=320, max_chars=30000,
+                           placeholder="Paste the responsibilities, qualifications, and preferred skills from the posting…", key="job")
+        with st.expander("Your source resume"):
+            st.caption("Keep your contact details, education, dates, and current experience in this source. "
+                       "Priority: uploaded file, then pasted text, then inputs/private/base_resume.tex.")
+            upload = st.file_uploader("Upload a source resume", type=["tex", "md", "txt"])
+            pasted = st.text_area("Or paste source text", height=180, key="source_text")
+        with st.expander("Generation settings"):
+            model = st.text_input("Chat model", value=os.getenv("RESUME_CHAT_MODEL") or DEFAULT_MODEL, key="model",
+                                  help="provider:model, e.g. anthropic:claude-opus-5-5 or ollama:qwen3:8b")
+            require_pdf = st.checkbox("Generate PDF too", value=True, key="require_pdf")
+            st.caption("The existing all-MiniLM-L6-v2 embedding index is used for retrieval.")
+        submitted = st.form_submit_button("Generate tailored resume", type="primary", width="stretch")
     source_error = None
     try:
         source = read_source(upload, pasted)
@@ -124,8 +133,13 @@ def main():
         source, source_error = "", str(error)
     if source_error:
         st.error(source_error)
+    if upload is not None:
+        st.caption(f"Source resume: uploaded file {upload.name}")
+    elif pasted.strip():
+        st.caption("Source resume: the text you pasted")
+    elif DEFAULT_RESUME.is_file():
+        st.caption("Source resume: inputs/private/base_resume.tex")
     current = fingerprint(job, source, model, require_pdf)
-    submitted = st.button("Generate tailored resume", type="primary", width="stretch")
     if submitted:
         st.session_state.pop("result", None)
         if not job.strip():

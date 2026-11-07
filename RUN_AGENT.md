@@ -15,7 +15,7 @@ an ignored file. The populated SQLite database and MiniLM index remain unchanged
 
 ```powershell
 python main.py
-python run_resume_agent.py --require-pdf --model ollama:qwen3:8b --job-file jobs/playstation.md --resume-file inputs/private/base_resume.tex
+python run_resume_agent.py --require-pdf --model anthropic:claude-opus-5-5 --job-file jobs/playstation.md --resume-file inputs/private/base_resume.tex
 ```
 
 The existing `--pipeline` flag remains accepted, but this is now the default.
@@ -29,18 +29,26 @@ The steps are:
    labels; the model does not transcribe LaTeX or join course fields. The plan
    records direct/partial/gap/context decisions. Invalid plans get
    at most two repairs. Retrieval similarity alone is not a supported claim.
-4. Write the job-specific resume with that plan, the source facts, and Jake’s
-   template. Preserve dates and completion status; rephrase/prioritize supported
+4. Write the job-specific resume body with that plan, the source facts, and
+   Jake’s template. The model writes only the content between
+   `\begin{document}` and `\end{document}`; the application always inserts the
+   approved preamble itself, so a mangled preamble can no longer fail a run.
+   Preserve dates and completion status; rephrase/prioritize supported
    bullets and skills rather than copying the original resume wholesale.
 5. Check the template and selected factual invariants, then separately review
    factual grounding and job relevance. A generic or unsupported draft gets at
    most two corrections before export is rejected.
 6. Compile with pdflatex when available; `--require-pdf` makes it mandatory.
 
-Keep the local Ollama server running. Use your exact installed tag or set
-`RESUME_CHAT_MODEL` in `.env`. The existing context defaults to 16384 tokens;
-`RESUME_OLLAMA_NUM_CTX` can increase it if your hardware permits. Progress messages
-identify the active stage; local model calls may take several minutes.
+The default chat model is hosted Claude (`anthropic:claude-opus-5-5`). Put
+`ANTHROPIC_API_KEY` in `.env`; a run usually takes a few minutes. The job
+posting and your resume sources are sent to Anthropic.
+
+Local Ollama models remain supported (`RESUME_CHAT_MODEL=ollama:<installed tag>`)
+for fully private runs. The app checks that the tag is installed before starting
+and disables Qwen "thinking" output. Without a dedicated GPU, expect each model
+call to take minutes; `RESUME_OLLAMA_NUM_CTX` (default 16384) must hold the job,
+sources, and draft, so smaller models with larger contexts need more RAM.
 
 ## PDF setup
 
@@ -50,8 +58,17 @@ Install MiKTeX or TeX Live and the packages in `templates/jakes_resume.tex`.
 Windows PATH. Missing required compilers fail before model inference.
 
 The compiler runs without shell escape, with a 60-second timeout. MiKTeX's
-interactive package installer is disabled: install missing packages through
-MiKTeX Console according to the saved log. Without `--require-pdf`, the CLI still
+interactive package installer is disabled during runs. Before the first run,
+install the template's packages once, then compile any `.tex` once with the
+installer enabled to fetch their dependencies:
+
+```powershell
+miktex packages install preprint titlesec marvosym enumitem fancyhdr
+pdflatex --enable-installer -interaction=nonstopmode templates/jakes_resume.tex
+```
+
+If a package is still missing, the run stops immediately (no futile rewrites),
+names the missing file, and saves the reviewed draft as `unverified_resume.tex`. Without `--require-pdf`, the CLI still
 compiles when possible and reports `NOT_RUN` if no compiler is available. The UI
 can explicitly disable compilation with its PDF checkbox.
 
@@ -109,7 +126,7 @@ command additionally uses actual MiniLM weights and tokenizer.
 To test live local inference across two different synthetic job descriptions:
 
 ```powershell
-$env:RESUME_LIVE_CHAT_MODEL = "ollama:qwen3:8b"
+$env:RESUME_LIVE_CHAT_MODEL = "anthropic:claude-opus-5-5"
 python -m unittest tests.test_live_acceptance -v
 ```
 

@@ -59,9 +59,16 @@ class AppTests(unittest.TestCase):
                 self.assertEqual(run.call_count, 1)
                 app.run()
                 self.assertEqual(run.call_count, 1)  # Download/rerun does not regenerate.
+                # Inputs live in a form: editing without submitting neither
+                # reruns generation nor discards the finished result.
                 app.text_area(key="job").set_value("Different job").run()
-                self.assertTrue(any("inputs have changed" in s.value for s in app.info))
-                self.assertEqual(len(app.success), 0)
+                self.assertEqual(run.call_count, 1)
+                self.assertTrue(any("LaTeX resume is ready" in s.value for s in app.success))
+
+    def test_default_model_is_hosted_claude(self):
+        with patch.dict("os.environ", {"RESUME_CHAT_MODEL": ""}):
+            app = AppTest.from_file(str(APP)).run()
+            self.assertEqual(app.text_input(key="model").value, "anthropic:claude-opus-5-5")
 
     def test_failed_run_never_shows_success(self):
         with patch("resume_pipeline.run_validated_pipeline", side_effect=ConnectionError("Ollama unavailable")):

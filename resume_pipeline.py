@@ -61,7 +61,7 @@ def retrieve_evidence(job_document, vector_store, *, requirements=None, with_sou
 
 
 def run_validated_pipeline(job_document, base_resume, output_directory, *, model=None, vector_store=None, require_pdf=False, progress=None, compile_pdf=True):
-    from agent import prepare_resume_request, get_resume_vector_store, initialize_chat_model
+    from agent import prepare_resume_request, get_resume_vector_store, initialize_chat_model, check_chat_model_available
     from resume_validation import find_latex_compiler, candidate_source_text
     prepare_resume_request(job_document, base_resume)
     if require_pdf and not compile_pdf:
@@ -88,6 +88,7 @@ def run_validated_pipeline(job_document, base_resume, output_directory, *, model
         if require_pdf and not find_latex_compiler():
             raise ValueError("PDF output requires pdflatex. Restart VS Code after adding MiKTeX to PATH, or select LaTeX only.")
         if model is None or isinstance(model, str):
+            check_chat_model_available(model)
             model = initialize_chat_model(model)
         if vector_store is None:
             emit("index", "Loading your existing MiniLM resume index")
@@ -114,7 +115,7 @@ def run_validated_pipeline(job_document, base_resume, output_directory, *, model
     except BaseException as error:
         # Keep diagnostics even when the user interrupts a long local model call.
         report = json.loads(report_path.read_text(encoding="utf-8"))
-        report.update(status="INTERRUPTED" if isinstance(error, KeyboardInterrupt) else "ERROR", error=str(error) or "Run interrupted")
+        report.update(status="INTERRUPTED" if not isinstance(error, Exception) else "ERROR", error=str(error) or "Run interrupted")
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
         emit("error", str(error) or "Run interrupted")
         raise

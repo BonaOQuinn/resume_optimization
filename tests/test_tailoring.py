@@ -51,6 +51,22 @@ class TailoringTests(unittest.TestCase):
         payload = json.loads(model.seen[0][1].content.split("\n", 1)[1])
         self.assertEqual(payload["retrieved_candidate_evidence"], [evidence])
 
+    def test_writer_and_reviewer_get_a_plan_without_duplicated_quotes(self):
+        from direct_resume import run_direct_resume_optimization
+        from tailoring import slim_plan
+        plan = plan_for()
+        slim = slim_plan(plan)
+        self.assertNotIn("quote", json.dumps(slim))
+        self.assertEqual([m["id"] for m in slim["requirements"]], [m["id"] for m in plan["requirements"]])
+        self.assertEqual(slim["projects"]["include"], ["Python API"])
+        improved = LATEX.replace("Built Python and SQL services;", "Developed Python services backed by SQL;")
+        model = RecordingChatModel(responses=[AIMessage(content=improved), AIMessage(content=PASS), AIMessage(content=PASS)])
+        with tempfile.TemporaryDirectory() as directory:
+            run_direct_resume_optimization("Python SQL", SOURCE, Path(directory) / "run", model=model,
+                                           tailoring_plan=plan, compile_pdf=False)
+        for messages in (model.seen[0], model.seen[2]):  # Writer and tailoring reviewer.
+            self.assertNotIn('"quote"', messages[1].content)
+
     def test_rare_late_requirement_is_retained_beside_frequent_generic_matches(self):
         class RankedStore:
             def similarity_search(self, query, **kwargs):

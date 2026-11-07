@@ -21,14 +21,22 @@ Open the local URL shown in the terminal (normally http://localhost:8501).
    real contact details, education, dates, roles, and accomplishments.
 2. Keep your populated SQLite resume database and MiniLM index available. After
    updating your database, run `python main.py` or use **Refresh index** in the UI.
-3. Make sure Ollama is running and the chat model shown in **Generation settings**
-   is installed. The default is `ollama:qwen3:8b`; `.env` can set
-   `RESUME_CHAT_MODEL` to your existing model. MiniLM remains the embedding model.
+3. Choose the chat model. The default is hosted Claude, `anthropic:claude-opus-5-5`:
+   copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY`. A local Ollama model
+   (`RESUME_CHAT_MODEL=ollama:<installed tag>`) also works and keeps everything on
+   your computer, but is much slower without a GPU. MiniLM remains the embedding model.
 4. Paste the **job description** and click **Generate tailored resume**.
 5. Download the `.tex` source and, when enabled, the compiled PDF. The match table
    explains which requirements have direct/partial support and which remain gaps.
 
 PDF output requires `pdflatex` and the packages in `templates/jakes_resume.tex`.
+With MiKTeX, install them once:
+
+```powershell
+miktex packages install preprint titlesec marvosym enumitem fancyhdr
+pdflatex --enable-installer -interaction=nonstopmode templates/jakes_resume.tex
+```
+
 The app checks PATH and common Windows MiKTeX/MiKTeX2 directories. If needed, set
 `RESUME_PDFLATEX` in `.env` to the full executable path. Uncheck **Generate PDF too**
 to generate and review LaTeX without compilation. MiKTeX package auto-install is
@@ -39,6 +47,10 @@ an unattended run.
 The app binds to your own computer. Source resumes and generated files stay in
 ignored local folders. The selected chat provider receives the supplied job and
 candidate sources; with a local Ollama model, inference runs locally.
+
+All inputs sit in one form and are read only when you press **Generate**, so
+editing a field during a run cannot interrupt it. The model writes only the
+resume body; the app inserts the approved preamble.
 
 ## What changed in tailoring
 

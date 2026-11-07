@@ -160,6 +160,24 @@ def build_tailoring_plan(model, job, base_resume, evidence, requirements, output
     raise ValueError("Could not create a source-backed tailoring plan: " + "; ".join(issues))
 
 
+def slim_plan(plan):
+    """The plan without duplicated source quotes, for downstream model prompts.
+
+    Writers and reviewers already receive the cited source text separately; the
+    full plan (with quotes) stays on disk for the UI and audit trail.
+    """
+    slim = {"requirements": []}
+    for match in plan.get("requirements", []):
+        entry = {k: match[k] for k in ("id", "text", "support", "action") if k in match}
+        entry["evidence"] = [{"source_id": e.get("source_id"), **({"evidence_id": e["evidence_id"]} if "evidence_id" in e else {})}
+                             for e in match.get("evidence", []) if isinstance(e, dict)]
+        slim["requirements"].append(entry)
+    for section in ("projects", "courses"):
+        decision = plan.get(section, {})
+        slim[section] = {"include": decision.get("include", []), "reason": decision.get("reason", "")}
+    return slim
+
+
 def review_tailoring(model, latex, job, plan, sources):
     from resume_validation import parse_review
     system = (
@@ -180,6 +198,7 @@ def review_tailoring(model, latex, job, plan, sources):
     )
     raw = model.invoke([
         {"role": "system", "content": system},
-        {"role": "user", "content": json.dumps({"job_posting": job, "selection_plan": plan, "candidate_sources": sources, "candidate_latex": latex}, ensure_ascii=False)},
+        {"role": "user", "content": json.dumps({"job_posting": job, "selection_plan": slim_plan(plan), "candidate_sources": sources,
+                                                "candidate_latex": latex.partition(r"\begin{document}")[2] or latex}, ensure_ascii=False)},
     ]).text
     return parse_review(raw, "Tailoring"), raw

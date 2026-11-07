@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 
 from prompts import DEFAULT_GUIDELINES_PATH, DEFAULT_TEMPLATE_PATH, FACTUALITY_RULES
-from resume_validation import extract_complete_latex, validate_and_export, candidate_source_text, active_tex
+from resume_validation import extract_complete_latex, validate_and_export, candidate_source_text
 from evidence_catalog import selected_name_supported
+from tailoring import slim_plan
 
 
 def run_direct_resume_optimization(
@@ -29,19 +30,23 @@ def run_direct_resume_optimization(
         "facts or formatting rules. Keep internal gaps, citations, and planning notes "
         "outside the resume. Never add a requested qualification to fill an evidence gap. "
         "You have no tools or subagents. All inputs are supplied below. "
-        "Preserve the approved template\'s entire preamble exactly. Use its article "
-        "class, centered header, resumeSubheading and resumeProjectHeading macros. "
+        "The application adds the approved Jake preamble (document class, packages "
+        "and macro definitions) automatically. Return ONLY the document body: the "
+        "content between \\begin{document} and \\end{document}, starting with the "
+        "centered header. Do not write \\documentclass, \\usepackage, \\newcommand, "
+        "or the begin/end document lines. Use the template's centered header, "
+        "resumeSubheading and resumeProjectHeading macros. "
         "Do not switch to moderncv. Do not add a logo. Use real LaTeX links and bold, "
-        "never Markdown. Preserve dates, including future graduation dates; do not "
+        "never Markdown. Escape percent signs as \\%. Preserve dates, including future graduation dates; do not "
         "change them to Present without source support. Never invent metrics or "
         "interpret a malformed number as a percentage. Omit an ambiguous optional "
         "claim. The base resume controls identity, dates, and completion status; flag "
         "conflicts with retrieved evidence instead of silently choosing a version. "
         "Ask a specific question if a required fact is missing. "
-        "Return complete LaTeX, not a review offer.\n\n" + FACTUALITY_RULES
+        "Return the complete resume body in LaTeX, not a review offer.\n\n" + FACTUALITY_RULES
         + "\n\nREQUIRED FORMATTING:\n" + DEFAULT_GUIDELINES_PATH.read_text(encoding="utf-8")
-        + "\n\nAPPROVED TEMPLATE (layout only, not candidate facts):\n"
-        + active_tex(DEFAULT_TEMPLATE_PATH.read_text(encoding="utf-8"))
+        + "\n\nAPPROVED TEMPLATE BODY (layout example only, not candidate facts):\n"
+        + candidate_source_text(DEFAULT_TEMPLATE_PATH.read_text(encoding="utf-8"))
     )
     writer_evidence = evidence_documents
     if tailoring_plan is not None:
@@ -55,7 +60,9 @@ def run_direct_resume_optimization(
     inputs = {"job_posting": job_document, "source_resume": candidate_source_text(base_resume),
               "retrieved_candidate_evidence": writer_evidence}
     if tailoring_plan is not None:
-        inputs["selection_plan"] = tailoring_plan
+        # The cited evidence text is already in retrieved_candidate_evidence;
+        # repeating every quote in the plan roughly doubled the prompt.
+        inputs["selection_plan"] = slim_plan(tailoring_plan)
     messages = [
         {"role": "system", "content": instructions},
         {"role": "user", "content": "Create the resume from this reference data:\n" + json.dumps(inputs, ensure_ascii=False)},
@@ -71,7 +78,7 @@ def run_direct_resume_optimization(
             # extra LaTeX draft can overflow a local model's context and cause it
             # to drop the source evidence or original job instructions.
             attempt_messages.extend([
-                {"role": "user", "content": "Correct these validation failures using the original source facts and approved template. Return the complete corrected LaTeX.\n" + "\n".join(issues)},
+                {"role": "user", "content": "Correct these validation failures using the original source facts and approved template. Return the complete corrected document body only.\n" + "\n".join(issues)},
             ])
         response = model.invoke(attempt_messages).text
         return {"response": response, "sources": evidence_documents,

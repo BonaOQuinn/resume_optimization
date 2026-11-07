@@ -33,7 +33,7 @@ from tests.test_tailoring import plan_for
 @unittest.skipUnless(shutil.which("pdflatex"), "Integration tests require pdflatex")
 class FullPipelineTests(unittest.TestCase):
     def run_pipeline(self, *, live_embeddings=False, agent_mode=False):
-        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory, ExitStack() as stack:
             root = Path(directory)
             database, persist = root / "resume.db", root / "chroma"
             with sqlite3.connect(database) as connection:

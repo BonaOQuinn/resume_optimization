@@ -11,7 +11,27 @@ from pathlib import Path
 from prompts import DEFAULT_TEMPLATE_PATH
 
 
+def template_preamble():
+    """The approved preamble, owned by the application rather than the model."""
+    return DEFAULT_TEMPLATE_PATH.read_text(encoding="utf-8").partition(r"\begin{document}")[0]
+
+
+def assemble_resume(body):
+    """Wrap a model-written document body in the exact approved preamble."""
+    if not body.startswith("\n"):
+        body = "\n" + body
+    if not body.endswith("\n"):
+        body += "\n"
+    return template_preamble() + r"\begin{document}" + body + r"\end{document}" + "\n"
+
+
 def extract_complete_latex(response):
+    """Return a complete document using the approved preamble, or None.
+
+    The model may return either a full document (its preamble is discarded and
+    replaced by the template's, because small models routinely mangle macro
+    definitions) or only the body between begin/end document.
+    """
     text = re.sub(r"<think>.*?</think>", "", response, flags=re.S).strip()
     blocks = re.findall(r"```(?:latex|tex)\s*\n(.*?)\n```", text, re.S)
     if blocks:
@@ -20,14 +40,19 @@ def extract_complete_latex(response):
         text = blocks[0].strip()
     elif text.startswith("```\n") and text.endswith("\n```"):
         text = text[4:-4].strip()
-    if not re.fullmatch(
-        r"(?:%[^\n]*\n\s*)*\\documentclass(?:\[[^\]]*\])?\{[^}]+\}"
-        r"[\s\S]*\\begin\{document\}[\s\S]*\\end\{document\}", text
-    ):
+    begins, ends = text.count(r"\begin{document}"), text.count(r"\end{document}")
+    if begins or ends or r"\documentclass" in text:
+        if not re.fullmatch(
+            r"(?:%[^\n]*\n\s*)*\\documentclass(?:\[[^\]]*\])?\{[^}]+\}"
+            r"[\s\S]*\\begin\{document\}[\s\S]*\\end\{document\}", text
+        ) or begins != 1 or ends != 1:
+            return None
+        body = text.partition(r"\begin{document}")[2].rpartition(r"\end{document}")[0]
+        return template_preamble() + r"\begin{document}" + body + r"\end{document}" + "\n"
+    # Body-only output must start with LaTeX markup, not prose or a review offer.
+    if not re.match(r"(?:%[^\n]*\n\s*)*\\", text) or r"\section" not in text:
         return None
-    if text.count(r"\begin{document}") != 1 or text.count(r"\end{document}") != 1:
-        return None
-    return text + "\n"
+    return assemble_resume(text)
 
 
 def active_tex(text):
@@ -121,7 +146,8 @@ def grounding_review(model, latex, sources):
     )
     raw = model.invoke([
         {"role": "system", "content": system},
-        {"role": "user", "content": json.dumps({"candidate_sources": sources, "candidate_latex": latex}, ensure_ascii=False)},
+        # The preamble is fixed template code, not candidate claims.
+        {"role": "user", "content": json.dumps({"candidate_sources": sources, "candidate_latex": latex.partition(r"\begin{document}")[2] or latex}, ensure_ascii=False)},
     ]).text
     return parse_review(raw, "Grounding"), raw
 
@@ -182,15 +208,24 @@ def compile_latex(latex, require_pdf=False, log_path=None):
             )
         except subprocess.TimeoutExpired:
             if log_path:
-                partial = (path / "draft.log").read_text(errors="replace") if (path / "draft.log").exists() else ""
+                partial = (path / "draft.log").read_text(encoding="utf-8", errors="replace") if (path / "draft.log").exists() else ""
                 Path(log_path).write_text(partial + "\nLaTeX compilation timed out.", encoding="utf-8")
             return ["LaTeX compilation timed out."], None, "FAIL"
-        log = (path / "draft.log").read_text(errors="replace") if (path / "draft.log").exists() else result.stdout + result.stderr
+        log = (path / "draft.log").read_text(encoding="utf-8", errors="replace") if (path / "draft.log").exists() else result.stdout + result.stderr
         if log_path:
             Path(log_path).write_text(log, encoding="utf-8")
         if result.returncode or not (path / "draft.pdf").is_file():
+            missing = sorted(set(re.findall(r"File `([^']+\.(?:sty|cls|def|fd|tex))' not found", log)))
+            if missing:
+                return [MISSING_PACKAGE_PREFIX + ", ".join(missing) + ". " + (
+                    "Install them once (MiKTeX: run `miktex packages install <name>` or open MiKTeX Console, "
+                    "or compile the template once with `pdflatex --enable-installer`), then retry. "
+                    "Generating again cannot fix a missing package.")], None, "FAIL"
             return ["LaTeX compilation failed:\n" + (result.stdout + result.stderr)[-2500:]], None, "FAIL"
         return [], (path / "draft.pdf").read_bytes(), "PASS"
+
+
+MISSING_PACKAGE_PREFIX = "Your LaTeX installation is missing required files: "
 
 
 def validate_and_export(output_directory, generate, model, base_resume, *, require_pdf=False, max_revisions=2,
@@ -214,7 +249,9 @@ def validate_and_export(output_directory, generate, model, base_resume, *, requi
         if progress:
             progress(stage, message)
 
+    from evidence_catalog import key as readable_key
     issues = []
+    approved_text = set()  # Visible text of drafts that already passed both reviews.
     for attempt in range(max_revisions + 1):
         try:
             checkpoint("writing", f"Writing the tailored resume (attempt {attempt + 1}/{max_revisions + 1})")
@@ -242,19 +279,26 @@ def validate_and_export(output_directory, generate, model, base_resume, *, requi
             record = {"attempt": attempt + 1, "issues": issues, "source_count": len(sources), "grounding": "NOT_RUN", "tailoring": "NOT_RUN", "compilation": "NOT_RUN"}
             report["attempts"].append(record)
             pdf = None
-            if not issues:
+            visible = readable_key(latex.partition(r"\begin{document}")[2]) if latex else None
+            if not issues and visible in approved_text:
+                # A markup-only correction (e.g. after a compile error) keeps the
+                # same claims, so the two model reviews need not run again.
+                record["grounding"] = record["tailoring"] = "PASS (unchanged text)"
+            elif not issues:
                 checkpoint("grounding", "Checking claims, dates, and metrics against your sources")
                 review, raw = grounding_review(model, latex, sources)
                 record["grounding"] = review["verdict"]
                 record["reviewer_response"] = raw
                 issues.extend(review["issues"])
-            if not issues and tailoring_plan is not None:
+            if not issues and tailoring_plan is not None and visible not in approved_text:
                 from tailoring import review_tailoring
                 checkpoint("tailoring", "Checking job relevance and project/course selection")
                 review, raw = review_tailoring(model, latex, job_document, tailoring_plan, sources)
                 record["tailoring"] = review["verdict"]
                 record["tailoring_response"] = raw
                 issues.extend(review["issues"])
+            if not issues:
+                approved_text.add(visible)
             if not issues and compile_pdf:
                 checkpoint("compiling", "Compiling the resume with pdflatex")
                 log_path = output_directory / f"compile_attempt_{attempt + 1}.log"
@@ -262,6 +306,15 @@ def validate_and_export(output_directory, generate, model, base_resume, *, requi
                 if log_path.exists():
                     saved["compile_log"] = log_path
                 issues.extend(compile_issues)
+                if any(i.startswith(MISSING_PACKAGE_PREFIX) for i in compile_issues):
+                    # Environment problem: another draft cannot fix it.
+                    draft = output_directory / "unverified_resume.tex"
+                    draft.write_text(latex, encoding="utf-8")
+                    saved["unverified_latex"] = draft
+                    report["status"] = "FAIL"
+                    report["error"] = compile_issues[0]
+                    checkpoint("failed", "LaTeX packages are missing; see the report")
+                    break
             if not issues:
                 report["status"] = "PASS"
                 destination = output_directory / "optimized_resume.tex"
@@ -278,7 +331,7 @@ def validate_and_export(output_directory, generate, model, base_resume, *, requi
             if report["status"] == "PASS":
                 break
         except BaseException as error:
-            report["status"] = "INTERRUPTED" if isinstance(error, KeyboardInterrupt) else "ERROR"
+            report["status"] = "INTERRUPTED" if not isinstance(error, Exception) else "ERROR"
             report["error"] = str(error) or "Run interrupted"
             saved["validation"].write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
             raise

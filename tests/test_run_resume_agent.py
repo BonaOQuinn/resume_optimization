@@ -21,7 +21,7 @@ class RunResumeAgentTests(unittest.TestCase):
             AIMessage(content="Draft written; independent validation follows."),
             AIMessage(content=PASS),
         ])
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             output = Path(directory) / "run"
             saved = run_resume_optimization("Required: Python.", SOURCE, output, model=model)
             self.assertEqual(saved["latex"].read_text(encoding="utf-8"), latex + "\n")
@@ -34,14 +34,15 @@ class RunResumeAgentTests(unittest.TestCase):
     def test_clarification_is_saved_without_fabricating_a_latex_output(self):
         # Each turn needs a distinct message ID, as with a real chat provider.
         model = RecordingChatModel(responses=[AIMessage(content="Please confirm your graduation date.") for _ in range(3)])
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             output = Path(directory) / "run"
             saved = run_resume_optimization("Job", "Incomplete source", output, model=model)
             self.assertEqual(set(saved), {"response", "validation"})
             self.assertIn("graduation date", saved["response"].read_text(encoding="utf-8"))
 
     def test_rejected_agent_draft_is_corrected_in_a_fresh_invocation(self):
-        bad = LATEX.replace("{article}", "{moderncv}")
+        # Preamble edits are repaired by the app, so use a body-level defect.
+        bad = LATEX.replace("Python, SQL", "**Python**, SQL")
         def write(content, call_id):
             return AIMessage(content="", tool_calls=[{"name": "write_file", "args": {"file_path": LATEX_PATH, "content": content}, "id": call_id}])
         model = RecordingChatModel(responses=[
@@ -49,7 +50,7 @@ class RunResumeAgentTests(unittest.TestCase):
             write(LATEX, "fixed"), AIMessage(content="Corrected draft written."),
             AIMessage(content=PASS),
         ])
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             saved = run_resume_optimization("Python", SOURCE, Path(directory) / "run", model=model)
             self.assertEqual(saved["latex"].read_text(), LATEX + "\n")
             self.assertIn("Corrected draft", saved["response"].read_text())

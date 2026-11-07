@@ -87,7 +87,7 @@ class ResumeValidationTests(unittest.TestCase):
             self.assertTrue(saved["pdf"].read_bytes().startswith(b"%PDF-"))
 
     def test_compiler_requirement_and_compile_failure_are_explicit(self):
-        with patch("resume_validation.shutil.which", return_value=None):
+        with patch("resume_validation.find_latex_compiler", return_value=None):
             self.assertEqual(compile_latex(LATEX)[2], "NOT_RUN")
             self.assertEqual(compile_latex(LATEX, require_pdf=True)[2], "FAIL")
         # Use the actual compiler when installed; undefined macros must fail.
@@ -106,6 +106,63 @@ class ResumeValidationTests(unittest.TestCase):
             report = json.loads((output / "validation.json").read_text())
             self.assertEqual(report["status"], "ERROR")
             self.assertFalse((output / "optimized_resume.tex").exists())
+
+    def test_body_only_response_is_wrapped_in_the_approved_preamble(self):
+        from tests.resume_fixture import BODY
+        import re
+        assembled = extract_complete_latex("```latex\n" + BODY.strip() + "\n```")
+        self.assertEqual(re.sub(r"\s+", "", assembled), re.sub(r"\s+", "", LATEX))
+        self.assertEqual(validate_resume(extract_complete_latex(BODY), [SOURCE]), [])
+        # Prose, or text without any resume section, is not a body.
+        self.assertIsNone(extract_complete_latex("Here is your resume: " + BODY))
+        self.assertIsNone(extract_complete_latex(r"\textbf{Only a name}"))
+
+    def test_mangled_model_preamble_is_replaced_not_rejected(self):
+        # The furthest real run failed here: a local model collapsed the macro
+        # definitions and dropped row breaks from the template preamble.
+        mangled = LATEX.replace("\\newcommand{\\resumeItem}[1]{\n  \\item\\small{\n    {#1 \\vspace{-2pt}}\n  }\n}",
+                                "\\newcommand{\\resumeItem}[1]{\\item\\small{#1}}").replace("{article}", "{moderncv}")
+        self.assertIn(r"\item\small{#1}}", mangled)
+        latex = extract_complete_latex(mangled)
+        self.assertEqual(latex, LATEX + "\n")
+        self.assertEqual(validate_resume(latex, [SOURCE]), [])
+
+    def test_missing_latex_package_stops_retries_and_keeps_reviewed_draft(self):
+        from resume_validation import MISSING_PACKAGE_PREFIX, validate_and_export
+        missing = ([MISSING_PACKAGE_PREFIX + "fullpage.sty. Install it."], None, "FAIL")
+        model = RecordingChatModel(responses=[AIMessage(content=PASS)])
+        calls = []
+        def generate(issues):
+            calls.append(issues)
+            return {"response": LATEX}
+        with tempfile.TemporaryDirectory() as directory, patch("resume_validation.compile_latex", return_value=missing):
+            saved = validate_and_export(Path(directory) / "run", generate, model, SOURCE, require_pdf=True)
+            report = json.loads(saved["validation"].read_text())
+            self.assertEqual(len(calls), 1)  # No futile regeneration.
+            self.assertEqual(report["status"], "FAIL")
+            self.assertIn("fullpage.sty", report["error"])
+            self.assertNotIn("latex", saved)
+            self.assertEqual(saved["unverified_latex"].read_text(encoding="utf-8"), LATEX + "\n")
+
+    def test_markup_only_correction_skips_repeated_model_reviews(self):
+        from resume_validation import validate_and_export
+        failed = (["LaTeX compilation failed: bad spacing"], None, "FAIL")
+        passed = ([], b"%PDF-1.5", "PASS")
+        model = RecordingChatModel(responses=[AIMessage(content=PASS)])  # Only one review available.
+        drafts = iter([LATEX, LATEX.replace("\\section{Projects}", "\\section{Projects}\n\\vspace{-2pt}")])
+        with tempfile.TemporaryDirectory() as directory, patch("resume_validation.compile_latex", side_effect=[failed, passed]):
+            saved = validate_and_export(Path(directory) / "run", lambda _: {"response": next(drafts)}, model, SOURCE)
+            report = json.loads(saved["validation"].read_text())
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(len(model.seen), 1)
+        self.assertEqual(report["attempts"][1]["grounding"], "PASS (unchanged text)")
+
+    def test_reviewers_receive_the_body_not_the_fixed_preamble(self):
+        model = RecordingChatModel(responses=[AIMessage(content=PASS)])
+        grounding_review(model, LATEX, [SOURCE])
+        payload = json.loads(model.seen[0][1].content)
+        self.assertNotIn("documentclass", payload["candidate_latex"])
+        self.assertIn("Demo Candidate", payload["candidate_latex"])
 
     def test_contact_urls_must_match_not_just_prefix_a_source_url(self):
         source = SOURCE + "\nhttps://example.org/demo-profile"

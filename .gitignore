@@ -6,3 +6,4 @@ backend/data/chroma/
 backend/data/huggingface/
 inputs/private/
 outputs/
+tempCodeRunnerFile.py

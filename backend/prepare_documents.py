@@ -5,6 +5,7 @@ Database text is preserved, including sentences, capitalization, and punctuation
 """
 
 import argparse
+import sys
 import json
 import sqlite3
 from collections import defaultdict
@@ -142,6 +143,10 @@ def prepare_documents(database_path: Path = DEFAULT_DATABASE) -> list[Document]:
 
 
 def main() -> None:
+    # Windows pipes default to the ANSI code page; resume text is UTF-8.
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
     parser.add_argument("--output", type=Path, help="Optional JSON file; defaults to stdout")
