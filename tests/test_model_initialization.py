@@ -76,6 +76,9 @@ class ChatInitializationTests(unittest.TestCase):
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), patch.object(resume_agent, "init_chat_model") as initialize:
             resume_agent.initialize_chat_model("anthropic:claude-opus-5-5")
             initialize.assert_called_once_with("anthropic:claude-opus-5-5", max_tokens=16000, timeout=300, max_retries=2)
+        with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), patch.object(resume_agent, "init_chat_model") as initialize:
+            resume_agent.initialize_chat_model("claude-opus-5-5")  # Bare Claude IDs imply Anthropic.
+            initialize.assert_called_once_with("anthropic:claude-opus-5-5", max_tokens=16000, timeout=300, max_retries=2)
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": ""}), patch.object(resume_agent, "init_chat_model") as initialize:
             with self.assertRaisesRegex(ValueError, "ANTHROPIC_API_KEY"):
                 resume_agent.initialize_chat_model("anthropic:claude-opus-5-5")

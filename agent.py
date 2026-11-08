@@ -125,11 +125,13 @@ def initialize_chat_model(model_name: str | None = None) -> BaseChatModel:
             "MiniLM is the embedding model, not the chat model."
         )
     selected = selected.strip()
+    if selected.startswith("claude-") and ":" not in selected:
+        selected = "anthropic:" + selected  # A bare Claude model ID is unambiguous.
     provider, separator, name = selected.partition(":")
     if not separator or not provider.strip() or not name.strip():
         raise ValueError(
-            "The chat model must use provider:model syntax, such as "
-            "ollama:YOUR_INSTALLED_MODEL."
+            f"The chat model '{selected}' must use provider:model syntax, such as "
+            "anthropic:claude-opus-5-5 or ollama:YOUR_INSTALLED_MODEL."
         )
     # init_chat_model selects the provider integration. It creates the client;
     # inference happens later when the compiled agent is invoked.
