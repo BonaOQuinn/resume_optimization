@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from prompts import DEFAULT_GUIDELINES_PATH, DEFAULT_TEMPLATE_PATH, FACTUALITY_RULES
-from resume_validation import extract_complete_latex, validate_and_export, candidate_source_text
+from resume_validation import extract_complete_latex, validate_and_export, candidate_source_text, NOTES_MARKER
 from evidence_catalog import selected_name_supported
 from tailoring import slim_plan
 
@@ -42,8 +42,12 @@ def run_direct_resume_optimization(
         "interpret a malformed number as a percentage. Omit an ambiguous optional "
         "claim. The base resume controls identity, dates, and completion status; flag "
         "conflicts with retrieved evidence instead of silently choosing a version. "
-        "Ask a specific question if a required fact is missing. "
-        "Return the complete resume body in LaTeX, not a review offer.\n\n" + FACTUALITY_RULES
+        "Return the complete resume body in LaTeX, not a review offer. The body must "
+        "end with its last LaTeX line. If a source fact is ambiguous or looks like a "
+        "typo, keep the base resume's wording in the resume and, after the body, add a "
+        "line containing exactly " + NOTES_MARKER + " followed by short plain-text "
+        "questions for the candidate. The application removes that part from the "
+        "resume and shows it to the candidate. Add nothing else after the body.\n\n" + FACTUALITY_RULES
         + "\n\nREQUIRED FORMATTING:\n" + DEFAULT_GUIDELINES_PATH.read_text(encoding="utf-8")
         + "\n\nAPPROVED TEMPLATE BODY (layout example only, not candidate facts):\n"
         + candidate_source_text(DEFAULT_TEMPLATE_PATH.read_text(encoding="utf-8"))

@@ -164,6 +164,47 @@ class ResumeValidationTests(unittest.TestCase):
         self.assertNotIn("documentclass", payload["candidate_latex"])
         self.assertIn("Demo Candidate", payload["candidate_latex"])
 
+    def test_reviewers_do_not_receive_a_dangling_end_document(self):
+        # A real run failed twice because the tailoring reviewer saw a body that
+        # ended with \end{document} and reported the document as broken.
+        from tailoring import review_tailoring
+        plan = {"requirements": [], "projects": {"include": [], "reason": "n/a"}, "courses": {"include": [], "reason": "n/a"}}
+        model = RecordingChatModel(responses=[AIMessage(content=PASS), AIMessage(content=PASS)])
+        grounding_review(model, LATEX, [SOURCE])
+        review_tailoring(model, LATEX, "Python", plan, [SOURCE])
+        for system, user in model.seen:
+            body = json.loads(user.content)["candidate_latex"]
+            self.assertNotIn(r"\end{document}", body)
+            self.assertNotIn(r"\begin{document}", body)
+            self.assertIn("Demo Candidate", body)
+            self.assertIn("only the resume body", system.content)
+
+    def test_writer_notes_after_the_body_stay_out_of_the_resume(self):
+        from tests.resume_fixture import BODY
+        from resume_validation import NOTES_MARKER, split_writer_notes
+        body = BODY.replace(r"\textbf{Languages}: Python, SQL", "\\begin{itemize}\n\\item Python, SQL\n\\end{itemize}").strip()
+        questions = "1. **Project end date:** the source says \"Dev 2025\". Is it December?"
+        clean = extract_complete_latex(body)
+        for response in (body + "\n\n---\nItems to confirm with the candidate (not part of the resume):\n" + questions,
+                         body + "\n" + NOTES_MARKER + "\n" + questions):
+            with self.subTest(response=response[-120:]):
+                self.assertEqual(extract_complete_latex(response), clean)
+                self.assertEqual(validate_resume(extract_complete_latex(response), [SOURCE]), [])
+                self.assertIn("Dev 2025", split_writer_notes(response)[1])
+        self.assertEqual(split_writer_notes(body), (body, ""))
+
+    def test_writer_notes_are_saved_for_the_user_when_a_resume_is_exported(self):
+        from tests.resume_fixture import BODY
+        from resume_validation import NOTES_MARKER
+        body = BODY.replace(r"\textbf{Languages}: Python, SQL", "\\begin{itemize}\n\\item Python, SQL\n\\end{itemize}").strip()
+        response = body + "\n" + NOTES_MARKER + "\nIs the project end month December?"
+        model = RecordingChatModel(responses=[AIMessage(content=response), AIMessage(content=PASS)])
+        with tempfile.TemporaryDirectory() as directory:
+            saved = run_direct_resume_optimization("Python", SOURCE, Path(directory) / "run", model=model)
+            self.assertEqual(json.loads(saved["validation"].read_text())["status"], "PASS")
+            self.assertNotIn("December", saved["latex"].read_text(encoding="utf-8"))
+            self.assertEqual(saved["notes"].read_text(encoding="utf-8").strip(), "Is the project end month December?")
+
     def test_contact_urls_must_match_not_just_prefix_a_source_url(self):
         source = SOURCE + "\nhttps://example.org/demo-profile"
         candidate = LATEX.replace("Python, SQL", r"\url{https://example.org}")

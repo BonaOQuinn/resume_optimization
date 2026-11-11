@@ -131,7 +131,7 @@ def initialize_chat_model(model_name: str | None = None) -> BaseChatModel:
     if not separator or not provider.strip() or not name.strip():
         raise ValueError(
             f"The chat model '{selected}' must use provider:model syntax, such as "
-            "anthropic:claude-opus-5-5 or ollama:YOUR_INSTALLED_MODEL."
+            "bedrock:claude-opus-5-5, anthropic:claude-opus-5-5, or ollama:YOUR_INSTALLED_MODEL."
         )
     # init_chat_model selects the provider integration. It creates the client;
     # inference happens later when the compiled agent is invoked.
@@ -152,7 +152,43 @@ def initialize_chat_model(model_name: str | None = None) -> BaseChatModel:
         # Do not send temperature or a thinking override: current Claude
         # models reject sampling parameters and keep adaptive thinking on.
         return init_chat_model(selected, max_tokens=16000, timeout=300, max_retries=2)
+    if provider == "bedrock":
+        return _initialize_bedrock_claude(name.strip())
     return init_chat_model(selected)
+
+
+def _initialize_bedrock_claude(name: str) -> BaseChatModel:
+    """Create Claude served by Amazon Bedrock (billed to the AWS account)."""
+    from bedrock_model import ChatAnthropicBedrock, bare_model_id
+
+    model_id = bare_model_id(name)
+    if not model_id.startswith("claude-"):
+        raise ValueError(
+            f"bedrock:{name} is not a Claude model. Use a Claude ID such as "
+            "bedrock:claude-opus-5-5 (anthropic.claude-opus-5-5 is also accepted)."
+        )
+    region = (os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "").strip()
+    if not region:
+        raise ValueError(
+            "Set AWS_REGION in .env (for example AWS_REGION=us-east-1) to use Claude in Amazon Bedrock."
+        )
+    profile = os.getenv("AWS_PROFILE", "").strip() or None
+    if not os.getenv("AWS_BEARER_TOKEN_BEDROCK", "").strip():
+        # Without a Bedrock API key, requests are signed with AWS credentials,
+        # which needs boto3 (installed by the anthropic[bedrock] extra).
+        try:
+            import boto3  # noqa: F401
+        except ImportError as error:
+            raise ValueError(
+                "Set AWS_BEARER_TOKEN_BEDROCK in .env to a Bedrock API key, or run "
+                "pip install \"anthropic[bedrock]\" and configure AWS credentials (aws configure)."
+            ) from error
+    # Same budgets as the direct Anthropic path; no temperature or thinking
+    # override, because current Claude models reject them.
+    return ChatAnthropicBedrock(
+        model=model_id, aws_region=region, aws_profile=profile,
+        max_tokens=16000, timeout=300, max_retries=2,
+    )
 
 
 def check_chat_model_available(model_name: str | None = None) -> None:

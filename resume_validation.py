@@ -25,14 +25,49 @@ def assemble_resume(body):
     return template_preamble() + r"\begin{document}" + body + r"\end{document}" + "\n"
 
 
+NOTES_MARKER = "%%% NOTES FOR CANDIDATE"
+# Every section of the approved layout closes with one of these lines, so
+# anything after the last one is not resume content.
+_BODY_CLOSERS = re.compile(
+    r"^[ \t]*(?:\\end\{(?:itemize|center|document)\}|\\resumeSubHeadingListEnd|\\resumeItemListEnd)[ \t]*$", re.M)
+_RESUME_MARKUP = re.compile(r"\\(?:section|begin|item|resume[A-Z]\w*|textbf|href|small)\b")
+
+
+def split_writer_notes(response):
+    """Separate the LaTeX a writer returned from questions it added for the user.
+
+    Writers asked to flag ambiguous facts tend to append a plain-text or
+    Markdown list after the resume. Left in place, that text is wrapped into
+    the document as if it were content. Returns (latex_text, notes).
+    """
+    text = re.sub(r"<think>.*?</think>", "", response, flags=re.S).strip()
+    blocks = re.findall(r"```(?:latex|tex)\s*\n(.*?)\n```", text, re.S)
+    if len(blocks) == 1:
+        # The fence already marks the document; text after it is commentary.
+        return text, text.rpartition("```")[2].strip()
+    if blocks:
+        return text, ""
+    if NOTES_MARKER in text:
+        text, _, notes = text.partition(NOTES_MARKER)
+        return text.strip(), notes.strip()
+    closers = list(_BODY_CLOSERS.finditer(text))
+    if closers:
+        trailer = text[closers[-1].end():].strip()
+        if trailer and not _RESUME_MARKUP.search(trailer):
+            notes = re.sub(r"\A(?:-{3,}|\*{3,}|_{3,})\s*", "", trailer).strip()
+            return text[:closers[-1].end()], notes
+    return text, ""
+
+
 def extract_complete_latex(response):
     """Return a complete document using the approved preamble, or None.
 
     The model may return either a full document (its preamble is discarded and
     replaced by the template's, because small models routinely mangle macro
-    definitions) or only the body between begin/end document.
+    definitions) or only the body between begin/end document. Trailing notes
+    for the user are not part of the document.
     """
-    text = re.sub(r"<think>.*?</think>", "", response, flags=re.S).strip()
+    text = split_writer_notes(response)[0]
     blocks = re.findall(r"```(?:latex|tex)\s*\n(.*?)\n```", text, re.S)
     if blocks:
         if len(blocks) != 1:
@@ -60,6 +95,25 @@ def active_tex(text):
     return "\n".join(
         re.split(r"(?<!\\)%", line, maxsplit=1)[0] for line in text.splitlines()
     )
+
+
+def review_body(latex):
+    """The resume content a reviewer should judge: no preamble, no document lines.
+
+    Sending the trailing \\end{document} without its \\begin{document} made the
+    reviewer reject accepted drafts as structurally broken.
+    """
+    if r"\begin{document}" not in latex:
+        return latex
+    return latex.partition(r"\begin{document}")[2].rpartition(r"\end{document}")[0].strip() + "\n"
+
+
+BODY_ONLY_NOTE = (
+    "candidate_latex is only the resume body. The application adds the approved "
+    "preamble and the begin/end document lines itself, then checks the template "
+    "structure and compiles the result, so do not report a missing preamble, "
+    "missing document boundaries, or the output mode. "
+)
 
 
 def candidate_source_text(text):
@@ -141,13 +195,14 @@ def grounding_review(model, latex, sources):
         "Do not change future dates just because they are future dates. Never infer a "
         "percentage from malformed text such as '35maintain'. No source support means "
         "REVISE. Do not claim links or contacts were externally verified. "
+        + BODY_ONLY_NOTE +
         'Return ONLY JSON: {"verdict":"PASS" or "REVISE","issues":["specific unsupported claim and source reason"]}. '
         "PASS requires an empty issues list. Semantic review is not compilation."
     )
     raw = model.invoke([
         {"role": "system", "content": system},
         # The preamble is fixed template code, not candidate claims.
-        {"role": "user", "content": json.dumps({"candidate_sources": sources, "candidate_latex": latex.partition(r"\begin{document}")[2] or latex}, ensure_ascii=False)},
+        {"role": "user", "content": json.dumps({"candidate_sources": sources, "candidate_latex": review_body(latex)}, ensure_ascii=False)},
     ]).text
     return parse_review(raw, "Grounding"), raw
 
@@ -266,8 +321,17 @@ def validate_and_export(output_directory, generate, model, base_resume, *, requi
                 evidence.write_text(generated["evidence"], encoding="utf-8")
                 saved["evidence"] = evidence
             latex = extract_complete_latex(generated.get("latex") or response)
+            notes = split_writer_notes(generated.get("latex") or response)[1]
             if latex:
                 (output_directory / f"attempt_{attempt + 1}.tex").write_text(latex, encoding="utf-8")
+            notes_path = output_directory / "writer_notes.md"
+            if latex and notes:
+                # Questions for the user, kept out of the resume itself.
+                notes_path.write_text(notes + "\n", encoding="utf-8")
+                saved["notes"] = notes_path
+            else:
+                notes_path.unlink(missing_ok=True)
+                saved.pop("notes", None)
             sources = [candidate_source_text(base_resume)] + generated.get("sources", [])
             issues = validate_resume(latex, sources) if latex else ["No complete LaTeX document was returned; generate the requested resume using the supplied inputs."]
             if latex and tailoring_plan is not None:

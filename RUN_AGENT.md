@@ -95,6 +95,7 @@ may select another new directory; existing directories are rejected.
 | `tailoring_plan.json` | Accepted cited plan, decisions, and evidence gaps |
 | `attempt_*.md`, `attempt_*.tex` | Diagnostic drafts; these are not accepted exports |
 | `response.md`, `trace.json` | Most recent writer response and input/output trace |
+| `writer_notes.md` | Questions the writer raised about ambiguous source facts; kept out of the resume and shown in the UI |
 | `compile_attempt_*.log` | Preserved compiler log, including errors/timeouts |
 | `validation.json` | Running/final status, stage, review and compiler results |
 | `optimized_resume.tex` | Exported only after acceptance checks pass |

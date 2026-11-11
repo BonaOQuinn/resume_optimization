@@ -60,6 +60,12 @@ def show_result(saved, output):
             st.download_button("Download reviewed LaTeX (not compiled)", saved["unverified_latex"].read_bytes(),
                                "optimized_resume.tex", "application/x-tex")
 
+    notes_path = output / "writer_notes.md"
+    if notes_path.exists():
+        # Ambiguous source facts the writer kept as written instead of guessing.
+        with st.expander("Questions to confirm in your source resume", expanded=True):
+            st.text(notes_path.read_text(encoding="utf-8"))
+
     plan_path = output / "tailoring_plan.json"
     if plan_path.exists():
         plan = json.loads(plan_path.read_text(encoding="utf-8"))

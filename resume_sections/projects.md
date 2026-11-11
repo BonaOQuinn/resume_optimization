@@ -1,10 +1,10 @@
 #Projects
 ### EasyChefAI 
-- Full stack android app that allows users to interact with a chatbot to create a personalized fitness plan based on their fitness goals, weight, height, BMI, age, and dietary preferences
+- Full stack web and Android app that allows users to interact with a chatbot to create a personalized fitness plan based on their fitness goals, weight, height, BMI, age, and dietary preferences
 
 - Leveraged Google’s Gemini’s API to create an AI “fitness coach” which strictly gives advice for fitness and health
 
-- Utilized prompt engineering, chat summarization, and API key rotation to reduce token usage by 35maintain consistent efficiency for chats
+- Utilized prompt engineering, chat summarization, and API key rotation to reduce token usage by 35% to maintain consistent efficiency for chats
 
 - Implemented unit testing to optimize performance before deployment
 
@@ -27,11 +27,5 @@ service management, NFS shared storage, automounting, firewall configuration, an
 - After initial training of the YOLOv26s.pt, I refined the model with optimized parameters to increase accuracy of tracking the basketball to account for frequent occlution throughout the video
 
 
-### Change Order Automation(in progress) - AI CLUB
-- Developing a React Native and FastAPI app for contractors to document work changes with photos, route them to the office, and request client approval.
-
-- Built backend endpoints for photo submission, office review, and approval decisions.
-
-- Designing a retrieval-augmented generation (RAG) pipeline that uses an AI model and AWS-hosted knowledge bases to compare proposed changes with project scope and provide context for office review.
 
 
