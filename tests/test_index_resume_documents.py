@@ -30,7 +30,7 @@ class OfflineEmbeddings(Embeddings):
 
 class IndexingTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self.temp.cleanup)
         self.folder = Path(self.temp.name)
         self.database = self.folder / "resume.db"

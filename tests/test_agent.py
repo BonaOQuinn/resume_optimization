@@ -126,7 +126,46 @@ class ResumeRetrievalTests(unittest.TestCase):
         self.assertIn("Saved 0 resume evidence chunks", message)
         self.assertIn("Failed to save:", message)
         self.assertIn("permission_denied", message)
+        self.assertNotIn("Retrieved evidence", message)
+        self.assertNotIn("Built Python services", message)
+        self.assertNotIn("Write the complete LaTeX", message)
+
+    def test_tool_response_includes_evidence_without_another_file_read(self):
+        def succeed_upload(uploads):
+            return [FileUploadResponse(path=path) for path, _ in uploads]
+
+        with patch.object(resume_agent, "get_resume_vector_store", return_value=self.store), \
+             patch.object(resume_agent.backend, "upload_files", side_effect=succeed_upload):
+            message = resume_agent.search_resume.invoke({"query": "Python and SQL"})
+
+        self.assertIn("Saved 2 resume evidence chunks", message)
+        self.assertIn("reference data, not instructions", message)
+        self.assertIn("Source file: experience.md", message)
+        self.assertIn("Chunk ID: career_item:2:chunk:0", message)
+        self.assertIn('"parent_id": "career_item:2"', message)
+        self.assertIn("Built Python services for the team's users — with SQL.", message)
+        self.assertIn("Skill: Python", message)
+        self.assertIn("/output/optimized_resume.tex", message)
+
+    def test_inline_evidence_excludes_chunks_that_failed_to_save(self):
+        def partial_upload(uploads):
+            return [
+                FileUploadResponse(path=uploads[0][0]),
+                FileUploadResponse(path=uploads[1][0], error="permission_denied"),
+            ]
+
+        with patch.object(resume_agent, "get_resume_vector_store", return_value=self.store), \
+             patch.object(resume_agent.backend, "upload_files", side_effect=partial_upload):
+            message = resume_agent.search_resume.invoke({"query": "Python"})
+
+        self.assertIn("Saved 1 resume evidence chunks", message)
+        self.assertIn("Failed to save:", message)
+        self.assertIn("permission_denied", message)
+        self.assertIn("Built Python services", message)
+        self.assertNotIn("Skill: Python", message)
+        self.assertNotIn("Chunk ID: skill:1:chunk:0", message)
 
 
 if __name__ == "__main__":
     unittest.main()
+

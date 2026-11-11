@@ -10,7 +10,7 @@ user-facing features.
 ### Web Developer - StaySharpSD.com
 - Developed full stack web application for Barbershop management / appointments
 
-- Created / maintain PostgreSQL table for Barbers, schedule, availability, skills which is connected to the User Interface via express framework to connect a REST API for user to book appointment
+- Created and maintain a PostgreSQL table for barbers, schedules, availability, and skills, connected to the user interface through an Express REST API for booking appointments
 
 - automation of haircut appointments increased number of bookings by 18%
 
@@ -20,3 +20,15 @@ user-facing features.
 - Designed and lead projects, workshops, and guest speaker lectures (Agentic AI workshops, computer vision demos, business strategy)
 
 - Defined and delegated specific responsibilities for each executive based on identification of their strength and weaknesses
+
+### Backend Engineer - Cohyric (Change Order Automation, in progress)
+
+- Developing a React Native and FastAPI app for contractors to document work changes with photos, route them to the office, and request client approval.
+
+- Built backend endpoints for photo submission, office review, and approval decisions.
+
+- Designing a retrieval-augmented generation (RAG) pipeline that uses an AI model and AWS-hosted knowledge bases to compare proposed changes with project scope and provide context for office review.
+
+- My team and I are simulating the scrum/agile method to maintain consistent deliverables for weekly meetings with Cohyric(client)
+
+

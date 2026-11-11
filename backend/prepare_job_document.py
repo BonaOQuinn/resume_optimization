@@ -76,6 +76,10 @@ def read_pasted_field(label: str) -> str:
 
 
 def main() -> None:
+    # Windows pipes default to the ANSI code page; resume text is UTF-8.
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, help="Optional JSON file; defaults to stdout")
     args = parser.parse_args()

@@ -29,7 +29,7 @@ user-facing features.
 
 - Leveraged Google’s Gemini’s API to create an AI “fitness coach” which strictly gives advice for fitness and health
 
-- Utilized prompt engineering, chat summarization, and API key rotation to reduce token usage by 35maintain consistent efficiency for chats
+- Utilized prompt engineering, chat summarization, and API key rotation to reduce token usage by 35% to maintain consistent efficiency for chats
 
 - Implemented unit testing to optimize performance before deployment
 
