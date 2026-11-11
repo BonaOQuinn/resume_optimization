@@ -32,6 +32,12 @@ Education is always the first content section. Do not insert Summary, Objective,
 or other sections ahead of it. Do not reorder the sections for a particular job.
 If an optional section is omitted, the remaining sections retain this order.
 
+## Technical Skills
+
+- Keep every source-supported skill, including tools unrelated to the target job
+  (for example computer-vision libraries). Tailor this section by ordering the
+  most relevant skills first, not by removing skills.
+
 ## Projects and coursework
 
 - Assess each project's applicability using supported overlap with the target

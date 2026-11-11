@@ -6,7 +6,7 @@
 
 - Utilized prompt engineering, chat summarization, and API key rotation to reduce token usage by 35% to maintain consistent efficiency for chats
 
-- Implemented unit testing to optimize performance before deployment
+- Implemented unit tests that verify the health of the database endpoint and API route before deployment
 
 ### Linux / Unix Server development
 - Built and administered a multi-VM infrastructure environment across OpenBSD, FreeBSD, AlmaLinux, Ubuntu,

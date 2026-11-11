@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 from prompts import DEFAULT_GUIDELINES_PATH, DEFAULT_TEMPLATE_PATH, FACTUALITY_RULES
-from resume_validation import extract_complete_latex, validate_and_export, candidate_source_text, NOTES_MARKER
+from resume_validation import (extract_complete_latex, validate_and_export, candidate_source_text,
+                               split_writer_notes, NOTES_MARKER)
 from evidence_catalog import selected_name_supported
 from tailoring import slim_plan
 
@@ -75,16 +76,32 @@ def run_direct_resume_optimization(
         from agent import initialize_chat_model
         model = initialize_chat_model(model)
 
+    # A full extra LaTeX draft can overflow a local model's context and cause it
+    # to drop the source evidence or original job instructions.
+    revise_in_place = type(model).__name__ != "ChatOllama"
+    feedback = []  # Every issue raised in this run, oldest first.
+    last_draft = []
+
     def generate(issues):
         attempt_messages = list(messages)
         if issues:
-            # Regenerate from the original sources and concrete feedback. A full
-            # extra LaTeX draft can overflow a local model's context and cause it
-            # to drop the source evidence or original job instructions.
-            attempt_messages.extend([
-                {"role": "user", "content": "Correct these validation failures using the original source facts and approved template. Return the complete corrected document body only.\n" + "\n".join(issues)},
-            ])
+            earlier = [i for i in feedback if i not in issues]
+            feedback.extend(i for i in issues if i not in feedback)
+            correction = ("Correct these validation failures using the original source facts and approved template. "
+                          "Return the complete corrected document body only.\n" + "\n".join(issues))
+            if earlier:
+                # A fresh rewrite used to reintroduce problems fixed one attempt earlier.
+                correction += ("\n\nFeedback from earlier attempts still applies. Do not reintroduce these problems:\n"
+                               + "\n".join(earlier))
+            if revise_in_place and last_draft:
+                # Editing the rejected draft converges; regenerating from scratch
+                # gave the reviewers new wording to object to on every attempt.
+                attempt_messages.append({"role": "assistant", "content": last_draft[-1]})
+                correction = ("Revise your previous draft. Change only what the feedback requires and keep "
+                              "every other line exactly as written.\n" + correction)
+            attempt_messages.append({"role": "user", "content": correction})
         response = model.invoke(attempt_messages).text
+        last_draft.append(split_writer_notes(response)[0])
         return {"response": response, "sources": evidence_documents,
                 "evidence": "\n\n".join(evidence_documents),
                 "trace": attempt_messages[1:] + [{"role": "assistant", "content": response}]}

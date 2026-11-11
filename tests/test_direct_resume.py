@@ -56,6 +56,26 @@ class DirectResumeTests(unittest.TestCase):
                 self.assertEqual(saved["response"].read_text(encoding="utf-8"), response)
                 self.assertFalse((saved["response"].parent / "optimized_resume.tex").exists())
 
+    def test_corrections_revise_the_previous_draft_and_keep_earlier_feedback(self):
+        # A real run failed because each retry regenerated from scratch with only
+        # the latest feedback, so attempt 3 repeated the error fixed in attempt 2.
+        first = '{"verdict":"REVISE","issues":["Keep the source attribution in bullet 2."]}'
+        second = '{"verdict":"REVISE","issues":["Say table, not tables."]}'
+        model = RecordingChatModel(responses=[
+            AIMessage(content=LATEX), AIMessage(content=first),
+            AIMessage(content=LATEX), AIMessage(content=second),
+            AIMessage(content=LATEX), AIMessage(content=PASS)])
+        with tempfile.TemporaryDirectory() as directory:
+            saved = run_direct_resume_optimization("Python", SOURCE, Path(directory) / "run", model=model)
+            self.assertIn("latex", saved)
+        second_try, third_try = model.seen[2], model.seen[4]
+        self.assertEqual(second_try[-2].content, LATEX)  # The rejected draft is revised in place.
+        self.assertIn("Keep the source attribution", second_try[-1].content)
+        self.assertEqual(third_try[-2].content, LATEX)
+        self.assertIn("Say table, not tables.", third_try[-1].content)
+        self.assertIn("Keep the source attribution", third_try[-1].content)
+        self.assertIn("earlier attempts", third_try[-1].content)
+
     def test_missing_inputs_fail_before_model_initialization(self):
         with patch("agent.initialize_chat_model") as initialize:
             for job, resume in (("", "Resume"), ("Job", " "), (None, "Resume")):
